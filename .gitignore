@@ -1,2 +1,4 @@
 match-env/
 trial.py
+__pycache__/
+smartmatch.db
