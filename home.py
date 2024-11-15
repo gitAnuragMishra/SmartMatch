@@ -4,7 +4,7 @@ from io import BytesIO
 import pytesseract
 from PIL import Image
 
-from database_func import add_recruiter, validate_recruiter, recruiter_exists, get_job_descriptions, save_job_description  # Import functions from the database module
+from database_func import add_recruiter, validate_recruiter, recruiter_exists, get_job_descriptions, save_job_description, delete_all_job_descriptions#, delete_job_description  # Import functions from the database module
 
 # Set page configuration
 st.set_page_config(page_title="SmartMatch", page_icon=":briefcase:", layout="wide")
@@ -64,6 +64,7 @@ def recruiter_login():
 
 # Recruiter Registration Page
 def recruiter_registration():
+    
     st.title("Recruiter Registration")
     new_recruiter_code = st.text_input("Create Recruiter Code")
     new_password = st.text_input("Create Password", type="password")
@@ -80,71 +81,86 @@ def recruiter_registration():
         st.session_state['page'] = 'recruiter_login'
         st.rerun()
 
-# Recruiter Dashboard
+
 def recruiter_dashboard():
     st.title(":office_worker: RECRUITER Dashboard")
     st.write(f"Welcome, Recruiter! Manage candidates, review profiles, and match with ideal candidates.")
     st.markdown("---")
 
-    # Job Openings Section with Save Feature
+    # Job Openings Section with Save and Delete Features
+    recruiter_code = st.session_state["recruiter_code"]
     col1, col2, col3 = st.columns(3)
+
     with col1:
         st.subheader("Job Openings")
         st.write("Post job openings, filter based on qualifications, and manage each candidate's status in the hiring pipeline.")
 
         # Fetch previously uploaded job descriptions
-        recruiter_code = st.session_state['recruiter_code']
         previous_descriptions = get_job_descriptions(recruiter_code)
 
         # Dropdown for previously uploaded job descriptions
         if previous_descriptions:
-            selected_description = st.selectbox("Select a previously uploaded job description", options=previous_descriptions.keys())
-            if selected_description:
-                st.write("**Selected Job Description:**")
-                st.write(previous_descriptions[selected_description])
+            selected_title = st.selectbox(
+                "Select a previously uploaded job description by title",
+                options=list(previous_descriptions.keys()),
+                key="description_select"
+            )
+            if selected_title:
+                with st.expander(f"**View Job Description: {selected_title}**", expanded=False):
+                    st.write(previous_descriptions[selected_title])  # Display the full description inside the expander
+
+        # Add Job Description Title
+        job_title = st.text_input("**Add new job opening**", placeholder="e.g., Software Engineer Intern", key="job_title")
 
         # Option to paste or upload job description
         job_description_option = st.radio(
             "How would you like to add the job description?",
-            ("Paste text", "Upload PDF")
+            ("Paste text", "Upload PDF"),
+            key="description_option"
         )
 
+        job_description = ""
         if job_description_option == "Paste text":
-            job_description = st.text_area("Paste job description here")
+            job_description = st.text_area("Paste job description here", key="text_description")
         elif job_description_option == "Upload PDF":
-            uploaded_file = st.file_uploader("Upload job description PDF", type="pdf")
-            job_description = ""
-            if uploaded_file is not None:
+            uploaded_file = st.file_uploader("Upload job description PDF", type="pdf", key="pdf_upload")
+            if uploaded_file:
                 job_description = extract_text_from_pdf(uploaded_file)
                 if job_description:
                     st.write("**Extracted Job Description:**")
                     st.write(job_description)
                 else:
-                    st.error("Could not extract text. Please ensure the PDF contains selectable text or use an OCR-enabled PDF.")
+                    st.error("Could not extract text. Ensure the PDF contains selectable text or use an OCR-enabled PDF.")
 
         # Save Job Description Button
-        if job_description and st.button("Save Job Description"):
-            if save_job_description(recruiter_code, job_description):
+        if job_title and job_description and st.button("Save Job Description", key="save_button"):
+            if save_job_description(recruiter_code, job_title, job_description):
                 st.success("Job description saved successfully!")
+                st.rerun()
             else:
-                st.error("Failed to save job description.")
+                st.error("Failed to save job description. Please try again.")
 
-    # Remaining sections
+        # Delete All Job Descriptions Button
+        if previous_descriptions and st.button("Delete All Job Descriptions"):
+            delete_all_job_descriptions(recruiter_code)
+            st.success("All job descriptions deleted successfully!")
+            st.rerun()
+
     with col2:
         st.subheader("Schedule Interviews")
         st.write("Seamlessly schedule interviews using Google Meet and Calendar integration.")
+
     with col3:
         st.subheader("Review Resumes")
         st.write("View candidate profiles and review their skills and experience.")
-    
+
     st.markdown("---")
 
     # Logout button
-    if st.button("Logout"):
-        st.session_state['page'] = 'landing'
-        st.session_state.pop('recruiter_code', None)
+    if st.button("Logout", key="logout_button"):
+        st.session_state["page"] = "landing"
+        st.session_state.pop("recruiter_code", None)
         st.rerun()
-
 
 # Helper function to extract text from a PDF
 def extract_text_from_pdf(uploaded_file):
