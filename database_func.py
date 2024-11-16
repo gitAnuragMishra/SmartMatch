@@ -34,7 +34,18 @@ def create_tables():
         )
         """
     )
-
+    # Create students table
+    c.execute(
+        """
+        CREATE TABLE IF NOT EXISTS students (
+            student_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_code TEXT UNIQUE,
+            name TEXT NOT NULL,
+            password TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL
+        )
+        """
+    )
     conn.commit()
     conn.close()
 
@@ -68,6 +79,44 @@ def recruiter_exists(recruiter_code):
     exists = c.fetchone() is not None
     conn.close()
     return exists
+
+# Student Functions
+def add_student(student_code, name, password, email):
+    conn = connect_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO students (student_code, name, password, email) VALUES (?, ?, ?, ?)",
+            (student_code, name, password, email),
+        )
+        conn.commit()
+        st.success("Student account created successfully!")
+    except sqlite3.IntegrityError as e:
+        st.error(f"Error: {e}")
+    finally:
+        conn.close()
+
+def validate_student(student_code, password):
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM students WHERE student_code = ? AND password = ?",
+        (student_code, password),
+    )
+    result = cursor.fetchone()
+    conn.close()
+    return result is not None
+
+
+
+def student_exists(student_code):
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM students WHERE student_code = ?", (student_code,))
+    exists = cursor.fetchone() is not None
+    conn.close()
+    return exists
+
 
 def save_job_description(recruiter_code, title, job_description):
     conn = connect_db()

@@ -4,7 +4,7 @@ from io import BytesIO
 import pytesseract
 from PIL import Image
 
-from database_func import add_recruiter, validate_recruiter, recruiter_exists, get_job_descriptions, save_job_description, delete_all_job_descriptions#, delete_job_description  # Import functions from the database module
+from database_func import add_recruiter, validate_recruiter, recruiter_exists, get_job_descriptions, save_job_description, delete_all_job_descriptions, student_exists, add_student, validate_student#, delete_job_description  # Import functions from the database module
 
 # Set page configuration
 st.set_page_config(page_title="SmartMatch", page_icon=":briefcase:", layout="wide")
@@ -36,10 +36,11 @@ def landing_page():
         if st.button("RECRUITER"):
             st.session_state['page'] = 'recruiter_login'
             st.rerun()
-    with col2:
         if st.button("STUDENT"):
-            st.session_state['page'] = 'student'
+            st.session_state['page'] = 'student_login'
             st.rerun()
+
+
 
 # Recruiter Login Page
 def recruiter_login():
@@ -48,7 +49,7 @@ def recruiter_login():
     password = st.text_input("Password", type="password")
     
     # Login and Registration Buttons
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         if st.button("Login"):
             if validate_recruiter(recruiter_code, password):
@@ -60,6 +61,10 @@ def recruiter_login():
     with col2:
         if st.button("Register as Recruiter"):
             st.session_state['page'] = 'recruiter_registration'
+            st.rerun()
+    with col3:
+        if st.button("Back to Home"):
+            st.session_state['page'] = 'landing'
             st.rerun()
 
 # Recruiter Registration Page
@@ -219,6 +224,58 @@ def student_page():
     if st.button("Back to Home"):
         st.session_state['page'] = 'landing'
         st.rerun()
+# Student Login Page
+def student_login():
+    st.title(":mortar_board: Student Login")
+    
+    # Login Fields
+    student_code = st.text_input("Student Code")
+    password = st.text_input("Password", type="password")
+    
+    # Login and Registration Buttons
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("Login"):
+            if validate_student(student_code, password):
+                st.session_state['page'] = 'student_dashboard'
+                st.session_state['student_code'] = student_code
+                st.rerun()
+            else:
+                st.error("Invalid student code or password.")
+    with col2:
+        if st.button("Register as Student"):
+            st.session_state['page'] = 'student_registration'
+            st.rerun()
+    with col3:
+        if st.button("Back to Home"):
+            st.session_state['page'] = 'landing'
+            st.rerun()
+
+# Student Registration Page
+def student_registration():
+    st.title(":mortar_board: Student Registration")
+    
+    # Registration Fields
+    name = st.text_input("Full Name")
+    student_code = st.text_input("Create Student Code")
+    password = st.text_input("Create Password", type="password")
+    email = st.text_input("Email Address")
+    
+    # Registration Button
+    if st.button("Register"):
+        if name and student_code and password and email:
+            if not student_exists(student_code):  # Check if the student code is unique
+                add_student(name, student_code, password, email)
+                st.success("Student registered successfully!")
+            else:
+                st.error("Student code already exists. Please choose a different code.")
+        else:
+            st.error("Please fill out all fields.")
+    
+    # Back to Login Page Button
+    if st.button("Back to Login Page"):
+        st.session_state['page'] = 'student_login'
+        st.rerun()
 
 # Main logic for handling pages
 if 'page' not in st.session_state:
@@ -232,5 +289,9 @@ elif st.session_state['page'] == 'recruiter_registration':
     recruiter_registration()
 elif st.session_state['page'] == 'recruiter_dashboard':
     recruiter_dashboard()
-elif st.session_state['page'] == 'student':
+elif st.session_state['page'] == 'student_login':
+    student_login()
+elif st.session_state['page'] == 'student_registration':
+    student_registration()
+elif st.session_state['page'] == 'student_dashboard':
     student_page()
