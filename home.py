@@ -73,10 +73,11 @@ def recruiter_registration():
     st.title("Recruiter Registration")
     new_recruiter_code = st.text_input("Create Recruiter Code")
     new_password = st.text_input("Create Password", type="password")
+    new_email = st.text_input("Email Address")
     
     if st.button("Register"):
         if new_recruiter_code and new_password:
-            add_recruiter(new_recruiter_code, new_password)
+            add_recruiter(new_recruiter_code, new_password, new_email)
             st.success("Recruiter registered successfully!")
         else:
             st.error("Please enter both code and password.")
@@ -198,7 +199,7 @@ def extract_text_from_pdf(uploaded_file):
 #         ocr_text += pytesseract.image_to_string(img)
 #     return ocr_text
 # Student Page
-def student_page():
+def student_dashboard():
     st.title(":mortar_board: STUDENT Dashboard")
     recruiter_code = st.text_input("Enter Recruiter Code to Connect")
     
@@ -265,7 +266,7 @@ def student_registration():
     if st.button("Register"):
         if name and student_code and password and email:
             if not student_exists(student_code):  # Check if the student code is unique
-                add_student(name, student_code, password, email)
+                add_student(student_code, name, password, email)
                 st.success("Student registered successfully!")
             else:
                 st.error("Student code already exists. Please choose a different code.")
@@ -294,4 +295,4 @@ elif st.session_state['page'] == 'student_login':
 elif st.session_state['page'] == 'student_registration':
     student_registration()
 elif st.session_state['page'] == 'student_dashboard':
-    student_page()
+    student_dashboard()

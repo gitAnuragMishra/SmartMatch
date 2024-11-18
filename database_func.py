@@ -1,5 +1,7 @@
 import sqlite3
 import streamlit as st
+import os
+import atexit
 
 
 def connect_db():
@@ -15,9 +17,10 @@ def create_tables():
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS recruiters (
-            recruiter_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            recruiter_id INTEGER PRIMARY KEY AUTOINCREMENT ,
             recruiter_code TEXT UNIQUE,
-            password TEXT
+            password TEXT,
+            email TEXT UNIQUE NOT NULL
         )
         """
     )
@@ -29,7 +32,7 @@ def create_tables():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             recruiter_id INTEGER,
             title TEXT,
-            description TEXT,
+            description TEXT, 
             FOREIGN KEY (recruiter_id) REFERENCES recruiters (recruiter_id)
         )
         """
@@ -42,7 +45,8 @@ def create_tables():
             student_code TEXT UNIQUE,
             name TEXT NOT NULL,
             password TEXT NOT NULL,
-            email TEXT UNIQUE NOT NULL
+            email TEXT UNIQUE NOT NULL,
+            pdf_location TEXT DEFAULT NULL
         )
         """
     )
@@ -50,11 +54,11 @@ def create_tables():
     conn.close()
 
 
-def add_recruiter(recruiter_code, password):
+def add_recruiter(recruiter_code, password, email):
     conn = connect_db()
     c = conn.cursor()
     try:
-        c.execute("INSERT INTO recruiters (recruiter_code, password) VALUES (?, ?)", (recruiter_code, password))
+        c.execute("INSERT INTO recruiters (recruiter_code, password, email) VALUES (?, ?, ?)", (recruiter_code, password, email))
         conn.commit()
         st.success("Recruiter account created successfully!")
     except sqlite3.IntegrityError:
@@ -197,6 +201,18 @@ def delete_all_job_descriptions(recruiter_code):
         return False
     finally:
         conn.close()
+
+def unlink_database():
+    """Delete the database file when the application closes."""
+    db_path = "smartmatch.db"
+    if os.path.exists(db_path):
+        try:
+            os.unlink(db_path)
+            print(f"Database {db_path} has been deleted successfully.")
+        except Exception as e:
+            print(f"Error unlinking the database: {e}")
+# atexit.register(unlink_database)
+
 
 
 # Ensure tables are created at runtime
