@@ -3,8 +3,9 @@ import pdfplumber  # PyMuPDF
 from io import BytesIO
 import pytesseract
 from PIL import Image
+import sqlite3
 
-from database_func import add_recruiter, validate_recruiter, recruiter_exists, get_job_descriptions, save_job_description, delete_all_job_descriptions, student_exists, add_student, validate_student#, delete_job_description  # Import functions from the database module
+from database_func import add_recruiter, validate_recruiter, recruiter_exists, get_job_descriptions, save_job_description, delete_all_job_descriptions, student_exists, add_student, validate_student, connect_db#, delete_job_description  # Import functions from the database module
 
 # Set page configuration
 st.set_page_config(page_title="SmartMatch", page_icon=":briefcase:", layout="wide")
@@ -200,12 +201,30 @@ def extract_text_from_pdf(uploaded_file):
 #     return ocr_text
 # Student Page
 def student_dashboard():
-    st.title(":mortar_board: STUDENT Dashboard")
+    # Display a welcome message with the student's name
+    if "student_name" in st.session_state:
+        st.title(f":mortar_board: Welcome, {st.session_state['student_name']}!")
+    else:
+        st.title(":mortar_board: STUDENT Dashboard")
+        st.warning("Please log in to see your details.")
+        return  # Stop execution if the student is not logged in
+
     recruiter_code = st.text_input("Enter Recruiter Code to Connect")
-    
+    recruiter_email = None
+
     if recruiter_code:
         if recruiter_exists(recruiter_code):
-            st.success("Recruiter found. You can proceed with profile actions.")
+            conn = connect_db()
+            cursor = conn.cursor()
+            cursor.execute("SELECT email FROM recruiters WHERE recruiter_code = ?", (recruiter_code,))
+            result = cursor.fetchone()
+            conn.close()
+
+            if result:
+                recruiter_email = result[0]
+                st.success(f"Recruiter found. ")
+            else:
+                st.error("Recruiter email not found.")
         else:
             st.error("Invalid recruiter code.")
     
@@ -217,36 +236,76 @@ def student_dashboard():
         st.write("Upload your resume and score your skills and experience to get matched with recruiters.")
     with col2:
         st.subheader("Contact Recruiter")
-        st.write("Connect with recruiters for interviews, feedback, and more.")
-    
+        if recruiter_email:
+            st.write(f"Compose an email to the recruiter below. Email: {recruiter_email}")
+            email_body = st.text_area("Write your email message:", placeholder='Type your message here...', label_visibility='hidden')
+
+            if st.button("Send Email"):
+                if email_body.strip():
+                    # Construct Gmail-specific URL
+                    gmail_url = (
+                        f"https://mail.google.com/mail/?view=cm&fs=1&to={recruiter_email}"
+                        f"&su=Job Inquiry&body={email_body}"
+                    )
+                    # Open Gmail in the browser's new tab
+                    st.markdown(
+                        f'<a href="{gmail_url}" target="_blank">Click here to send the email</a>',
+                        unsafe_allow_html=True
+                    )
+                else:
+                    st.error("Email body cannot be empty.")
+
     st.markdown("---")
-    
+
     # Back to Home button
     if st.button("Back to Home"):
         st.session_state['page'] = 'landing'
         st.rerun()
+
+
 # Student Login Page
 def student_login():
     st.title(":mortar_board: Student Login")
     
     # Login Fields
-    student_code = st.text_input("Student Code")
-    password = st.text_input("Password", type="password")
+    student_code = st.text_input("Student Code", key="student_code_input")
+    password = st.text_input("Password", type="password", key="password_input")
     
-    # Login and Registration Buttons
+    # Login and Navigation Buttons
     col1, col2, col3 = st.columns(3)
+    
+    # Login Logic
     with col1:
         if st.button("Login"):
             if validate_student(student_code, password):
-                st.session_state['page'] = 'student_dashboard'
-                st.session_state['student_code'] = student_code
-                st.rerun()
+                # Fetch student name
+                conn = connect_db()
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT name FROM students WHERE student_code = ?",
+                    (student_code,)
+                )
+                result = cursor.fetchone()
+                conn.close()
+
+                if result:
+                    st.session_state['student_name'] = result[0]  # Store student name
+                    st.session_state['student_code'] = student_code  # Store student code
+                    st.session_state['page'] = 'student_dashboard'  # Navigate to dashboard
+                    st.success(f"Welcome, {result[0]}!")
+                    st.rerun()
+                else:
+                    st.error("Error fetching student details. Please contact support.")
             else:
                 st.error("Invalid student code or password.")
+    
+    # Registration Button
     with col2:
         if st.button("Register as Student"):
             st.session_state['page'] = 'student_registration'
             st.rerun()
+    
+    # Back to Home Button
     with col3:
         if st.button("Back to Home"):
             st.session_state['page'] = 'landing'
