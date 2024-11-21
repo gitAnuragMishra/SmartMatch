@@ -4,6 +4,9 @@ from io import BytesIO
 import pytesseract
 from PIL import Image
 import sqlite3
+import os
+import shutil
+import re
 
 from database_func import add_recruiter, validate_recruiter, recruiter_exists, get_job_descriptions, save_job_description, delete_all_job_descriptions, student_exists, add_student, validate_student, connect_db#, delete_job_description  # Import functions from the database module
 
@@ -135,13 +138,13 @@ def recruiter_dashboard():
                 job_description = extract_text_from_pdf(uploaded_file)
                 if job_description:
                     st.write("**Extracted Job Description:**")
-                    st.write(job_description)
+                    st.text_area("Extracted text from your uploaded resume:", value=job_description, height=200, disabled=True)
                 else:
                     st.error("Could not extract text. Ensure the PDF contains selectable text or use an OCR-enabled PDF.")
 
         # Save Job Description Button
         if job_title and job_description and st.button("Save Job Description", key="save_button"):
-            if save_job_description(recruiter_code, job_title, job_description):
+            if save_job_description(recruiter_code, job_title, job_description, uploaded_file):
                 st.success("Job description saved successfully!")
                 st.rerun()
             else:
@@ -153,14 +156,57 @@ def recruiter_dashboard():
             st.success("All job descriptions deleted successfully!")
             st.rerun()
 
-    with col2:
-        st.subheader("Schedule Interviews")
-        st.write("Seamlessly schedule interviews using Google Meet and Calendar integration.")
 
-    with col3:
+    with col2:
         st.subheader("Review Resumes")
         st.write("View candidate profiles and review their skills and experience.")
 
+        # Fetch student resumes associated with this recruiter
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT s.student_code, s.name, rr.resume_text
+            FROM recruiter_resumes rr
+            JOIN students s ON rr.student_code = s.student_code
+            WHERE rr.recruiter_code = ?
+        """, (recruiter_code,))
+        student_resumes = cursor.fetchall()
+
+        if student_resumes:
+            # Convert to a DataFrame for better display
+            import pandas as pd
+            df = pd.DataFrame(student_resumes, columns=["Student ID", "Student Name", "Resume"])
+            st.dataframe(df)  # Display in tabular format
+
+            # # Downloadable resume links
+            # st.markdown("### Download Resumes")
+            # for student_id, student_name, resume_text in student_resumes:
+            #     # Create a downloadable file for the resume text
+            #     file_name = f"{student_name}_resume.txt"
+            #     st.download_button(
+            #         label=f"Download {student_name}'s Resume",
+            #         data=resume_text,
+            #         file_name=file_name,
+            #         mime="text/plain"
+            #     )
+        else:
+            st.info("No resumes have been submitted yet.")
+        with col3:
+            st.subheader("AI recuiter assistant")
+            st.write('chat with the recuiter bot')
+
+    st.markdown("---")
+
+    col4, col5  = st.columns(2)
+    with col4:
+        st.subheader("Shortlist candidates")
+        st.write("Match candidates to specific job openings based on skills and experience, making hiring decisions faster and more accurate.")
+
+    with col5:
+        st.subheader("Schedule Interviews")
+        st.write("Seamlessly schedule interviews using Google Meet and Calendar integration.")
+
+    
     st.markdown("---")
 
     # Logout button
@@ -200,6 +246,7 @@ def extract_text_from_pdf(uploaded_file):
 #         ocr_text += pytesseract.image_to_string(img)
 #     return ocr_text
 # Student Page
+
 def student_dashboard():
     # Display a welcome message with the student's name
     if "student_name" in st.session_state:
@@ -209,8 +256,13 @@ def student_dashboard():
         st.warning("Please log in to see your details.")
         return  # Stop execution if the student is not logged in
 
+    # Fetch student code for database operations
+    student_code = st.session_state.get("student_code")
+
+    # Recruiter Matching Section
     recruiter_code = st.text_input("Enter Recruiter Code to Connect")
     recruiter_email = None
+    job_descriptions = []
 
     if recruiter_code:
         if recruiter_exists(recruiter_code):
@@ -218,27 +270,112 @@ def student_dashboard():
             cursor = conn.cursor()
             cursor.execute("SELECT email FROM recruiters WHERE recruiter_code = ?", (recruiter_code,))
             result = cursor.fetchone()
-            conn.close()
 
             if result:
                 recruiter_email = result[0]
-                st.success(f"Recruiter found. ")
+                st.success("Recruiter found.")
+
+                # Fetch Job Descriptions for the connected recruiter
+                cursor.execute(
+                    """
+                    SELECT jd.id, jd.title, jd.description
+                    FROM job_descriptions jd
+                    INNER JOIN recruiters r ON jd.recruiter_id = r.recruiter_id
+                    WHERE r.recruiter_code = ?
+                    """,
+                    (recruiter_code,)
+                )
+                job_descriptions = cursor.fetchall()
+
             else:
                 st.error("Recruiter email not found.")
         else:
             st.error("Invalid recruiter code.")
-    
+
     st.markdown("---")
 
+    # Fetch previously stored resume text
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT pdf_location FROM students WHERE student_code = ?", (student_code,))
+    result = cursor.fetchone()
+    previous_text = result[0] if result else None
+
+    # Columns for Resume Handling and Recruiter Contact
     col1, col2 = st.columns(2)
+
     with col1:
-        st.subheader("Score your Resume")
-        st.write("Upload your resume and score your skills and experience to get matched with recruiters.")
+        st.subheader("Your Resume Text")
+        if previous_text:
+            st.text_area("Previously Uploaded Resume Text", value=previous_text, height=200, disabled=True)
+        else:
+            st.info("No resume text found. Please upload your resume.")
+
+        uploaded_file = st.file_uploader("Upload your Resume (PDF only):", type=["pdf"])
+
+        if uploaded_file:
+            try:
+                # Extract text from uploaded PDF using pdfplumber
+                pdf_text = ""
+                with pdfplumber.open(BytesIO(uploaded_file.read())) as pdf:
+                    for page in pdf.pages:
+                        pdf_text += page.extract_text() or ""
+
+                if pdf_text.strip():
+                    # Save extracted text into the student's `pdf_location` field
+                    cursor.execute(
+                        "UPDATE students SET pdf_location = ? WHERE student_code = ?",
+                        (pdf_text, student_code),
+                    )
+                    conn.commit()
+
+                    # Display extracted text
+                    st.markdown("### Extracted Resume Text")
+                    st.text_area("Extracted text from your uploaded resume:", value=pdf_text, height=200, disabled=True)
+
+                    st.success("Resume text successfully extracted and saved.")
+                else:
+                    st.error("The uploaded PDF is empty or unreadable.")
+            except Exception as e:
+                st.error(f"An error occurred while processing the PDF: {str(e)}")
+
+        # Display available job descriptions (if any)
+        if job_descriptions:
+            st.subheader("Available Job Descriptions from Recruiter")
+            jd_options = {jd[1]: f"{jd[1]} - {jd[2][:50]}..." for jd in job_descriptions}  # JD title and short description
+            selected_jd_title = st.selectbox("Select a Job Description to Apply For", jd_options.keys(), format_func=lambda x: jd_options[x])
+        else:
+            selected_jd_title = None
+
+
+        # Button to send resume to recruiter
+        if st.button("Send Resume to Recruiter"):
+            if recruiter_code and previous_text and selected_jd_title:
+                # Check if a record already exists with the title instead of jd_id
+                cursor.execute(
+                    "SELECT COUNT(*) FROM recruiter_resumes WHERE recruiter_code = ? AND student_code = ? AND jd_title = ?",
+                    (recruiter_code, student_code, selected_jd_title),
+                )
+                record_exists = cursor.fetchone()[0]
+
+                if record_exists:
+                    st.warning("You have already sent your resume for this job description.")
+                else:
+                    # Insert the new record with the job description title
+                    cursor.execute(
+                        "INSERT INTO recruiter_resumes (recruiter_code, student_code, resume_text, jd_title) VALUES (?, ?, ?, ?)",
+                        (recruiter_code, student_code, previous_text, selected_jd_title),
+                    )
+                    conn.commit()
+                    st.success("Your resume has been sent to the recruiter for the selected job description.")
+            else:
+                st.error("Please upload a resume, connect with a recruiter, and select a job description before sending.")
+
     with col2:
         st.subheader("Contact Recruiter")
         if recruiter_email:
             st.write(f"Compose an email to the recruiter below. Email: {recruiter_email}")
-            email_body = st.text_area("Write your email message:", placeholder='Type your message here...', label_visibility='hidden')
+            email_body = st.text_area("Write your email message:", placeholder="Type your message here...", label_visibility='hidden')
 
             if st.button("Send Email"):
                 if email_body.strip():
@@ -254,6 +391,8 @@ def student_dashboard():
                     )
                 else:
                     st.error("Email body cannot be empty.")
+
+    conn.close()
 
     st.markdown("---")
 

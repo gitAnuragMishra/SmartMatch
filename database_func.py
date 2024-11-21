@@ -2,6 +2,8 @@ import sqlite3
 import streamlit as st
 import os
 import atexit
+import shutil
+import re
 
 
 def connect_db():
@@ -33,6 +35,7 @@ def create_tables():
             recruiter_id INTEGER,
             title TEXT,
             description TEXT, 
+            jd_pdf_location TEXT DEFAULT NULL,
             FOREIGN KEY (recruiter_id) REFERENCES recruiters (recruiter_id)
         )
         """
@@ -48,6 +51,22 @@ def create_tables():
             email TEXT UNIQUE NOT NULL,
             pdf_location TEXT DEFAULT NULL
         )
+        """
+    )
+    # Create resumes table
+    c.execute(
+        """
+        CREATE TABLE IF NOT EXISTS recruiter_resumes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            recruiter_code TEXT NOT NULL,
+            student_code TEXT NOT NULL,
+            resume_text TEXT NOT NULL,
+            jd_title TEXT NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (recruiter_code) REFERENCES recruiters(recruiter_code),
+            FOREIGN KEY (student_code) REFERENCES students(student_code)
+        )
+
         """
     )
     conn.commit()
@@ -122,7 +141,7 @@ def student_exists(student_code):
     return exists
 
 
-def save_job_description(recruiter_code, title, job_description):
+def save_job_description(recruiter_code, title, job_description, jd_pdf_file = None):
     conn = connect_db()
     c = conn.cursor()
     try:
@@ -130,9 +149,19 @@ def save_job_description(recruiter_code, title, job_description):
         recruiter = c.fetchone()
         if recruiter:
             recruiter_id = recruiter[0]
+            pdf_location = None
+            if jd_pdf_file:
+                pdf_dir = "jd_pdfs"
+                os.makedirs(pdf_dir, exist_ok=True)
+                sanitized_title = re.sub(r'[^\w\-_\. ]', '_', title)
+                pdf_file_path = os.path.join(pdf_dir, f"{sanitized_title}_{recruiter_id}.pdf")
+                with open(pdf_file_path, "wb") as f:
+                    f.write(jd_pdf_file.getbuffer())
+                pdf_location = pdf_file_path
+
             c.execute(
-                "INSERT INTO job_descriptions (recruiter_id, title, description) VALUES (?, ?, ?)",
-                (recruiter_id, title, job_description),
+                "INSERT INTO job_descriptions (recruiter_id, title, description, jd_pdf_location) VALUES (?, ?, ?, ?)",
+                (recruiter_id, title, job_description, pdf_location),
             )
             conn.commit()
             return True
@@ -144,6 +173,8 @@ def save_job_description(recruiter_code, title, job_description):
         return False
     finally:
         conn.close()
+
+
 
 def get_job_descriptions(recruiter_code):
     conn = connect_db()
