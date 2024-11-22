@@ -1,5 +1,5 @@
 import streamlit as st
-import pdfplumber  # PyMuPDF
+import fitz
 from io import BytesIO
 import pytesseract
 from PIL import Image
@@ -7,6 +7,9 @@ import sqlite3
 import os
 import shutil
 import re
+
+import google.generativeai as genai
+genai.configure(api_key=os.environ['GEMINI_API_KEY'])
 
 from database_func import add_recruiter, validate_recruiter, recruiter_exists, get_job_descriptions, save_job_description, delete_all_job_descriptions, student_exists, add_student, validate_student, connect_db#, delete_job_description  # Import functions from the database module
 
@@ -109,6 +112,7 @@ def recruiter_dashboard():
         previous_descriptions = get_job_descriptions(recruiter_code)
 
         # Dropdown for previously uploaded job descriptions
+        selected_title = None
         if previous_descriptions:
             selected_title = st.selectbox(
                 "Select a previously uploaded job description by title",
@@ -138,7 +142,7 @@ def recruiter_dashboard():
                 job_description = extract_text_from_pdf(uploaded_file)
                 if job_description:
                     st.write("**Extracted Job Description:**")
-                    st.text_area("Extracted text from your uploaded resume:", value=job_description, height=200, disabled=True)
+                    st.text_area("Extracted text from your uploaded job description:", value=job_description, height=200, disabled=True)
                 else:
                     st.error("Could not extract text. Ensure the PDF contains selectable text or use an OCR-enabled PDF.")
 
@@ -156,51 +160,94 @@ def recruiter_dashboard():
             st.success("All job descriptions deleted successfully!")
             st.rerun()
 
-
     with col2:
         st.subheader("Review Resumes")
         st.write("View candidate profiles and review their skills and experience.")
 
-        # Fetch student resumes associated with this recruiter
-        conn = connect_db()
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT s.student_code, s.name, rr.resume_text
-            FROM recruiter_resumes rr
-            JOIN students s ON rr.student_code = s.student_code
-            WHERE rr.recruiter_code = ?
-        """, (recruiter_code,))
-        student_resumes = cursor.fetchall()
+        if selected_title:
+            # Fetch resumes for the selected job description
+            conn = connect_db()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT s.student_code, s.name, rr.resume_text, rr.timestamp
+                FROM recruiter_resumes rr
+                JOIN students s ON rr.student_code = s.student_code
+                WHERE rr.jd_title = ? AND rr.recruiter_code = ?
+                """,
+                (selected_title, recruiter_code)
+            )
+            resumes = cursor.fetchall()
 
-        if student_resumes:
-            # Convert to a DataFrame for better display
-            import pandas as pd
-            df = pd.DataFrame(student_resumes, columns=["Student ID", "Student Name", "Resume"])
-            st.dataframe(df)  # Display in tabular format
-
-            # # Downloadable resume links
-            # st.markdown("### Download Resumes")
-            # for student_id, student_name, resume_text in student_resumes:
-            #     # Create a downloadable file for the resume text
-            #     file_name = f"{student_name}_resume.txt"
-            #     st.download_button(
-            #         label=f"Download {student_name}'s Resume",
-            #         data=resume_text,
-            #         file_name=file_name,
-            #         mime="text/plain"
-            #     )
+            if resumes:
+                for student_code, name, resume_text, timestamp in resumes:
+                    with st.expander(f"**{name} (Student ID: {student_code})**"):
+                        st.write(f"**Submitted on:** {timestamp}")
+                        st.write(f"**Resume:**\n{resume_text}")
+            else:
+                st.info("No resumes have been submitted for the selected job description.")
         else:
-            st.info("No resumes have been submitted yet.")
-        with col3:
-            st.subheader("AI recuiter assistant")
-            st.write('chat with the recuiter bot')
+            st.info("Select a job description to view the corresponding resumes.")
+
+    with col3:
+        st.subheader("AI Recruiter Assistant")
+        st.write("Chat with the recruiter bot for automated insights and assistance.")
 
     st.markdown("---")
 
     col4, col5  = st.columns(2)
     with col4:
-        st.subheader("Shortlist candidates")
-        st.write("Match candidates to specific job openings based on skills and experience, making hiring decisions faster and more accurate.")
+        import pandas as pd
+        from sentence_transformers import SentenceTransformer
+        from sklearn.metrics.pairwise import cosine_similarity
+        import numpy as np
+
+        with col4:
+            st.subheader("Shortlist Candidates")
+            st.write("Match candidates to specific job openings based on skills and experience, making hiring decisions faster and more accurate.")
+
+            # if selected_title:
+            #     st.write(f"**Job Description:** {selected_title}")
+            #     jd_text = previous_descriptions[selected_title]  # Fetch JD text
+
+            #     # Fetch resumes for the selected JD
+            #     conn = connect_db()
+            #     cursor = conn.cursor()
+            #     cursor.execute(
+            #         """
+            #         SELECT s.student_code, s.name, rr.resume_text
+            #         FROM recruiter_resumes rr
+            #         JOIN students s ON rr.student_code = s.student_code
+            #         WHERE rr.jd_title = ? AND rr.recruiter_code = ?
+            #         """,
+            #         (selected_title, recruiter_code)
+            #     )
+            #     resumes = cursor.fetchall()
+                
+            #     if resumes:
+            #         # Extract resume texts
+            #         resume_data = [{"Student ID": r[0], "Name": r[1], "Resume": r[2]} for r in resumes]
+            #         resume_df = pd.DataFrame(resume_data)
+
+            #         # Initialize embedding model
+            #         model = SentenceTransformer("all-MiniLM-L6-v2", cache_folder=r'D:\models')
+
+            #         # Compute embeddings for JD and resumes
+            #         jd_embedding = model.encode([jd_text], convert_to_tensor=True)
+            #         resume_embeddings = model.encode(resume_df["Resume"].tolist(), convert_to_tensor=True)
+
+            #         # Calculate cosine similarities
+            #         similarities = cosine_similarity(jd_embedding, resume_embeddings).flatten()
+            #         resume_df["Skill Similarity"] = np.round(similarities * 100, 2)  # Convert to percentage
+
+            #         # Display the table with similarity scores
+            #         st.write("**Resumes with Skill Similarity:**")
+            #         st.dataframe(resume_df[["Student ID", "Name", "Skill Similarity"]].sort_values("Skill Similarity", ascending=False))
+            #     else:
+            #         st.info("No resumes submitted for the selected job description.")
+            # else:
+            #     st.info("Select a job description to view the corresponding resumes.")
+    
 
     with col5:
         st.subheader("Schedule Interviews")
@@ -220,9 +267,13 @@ def extract_text_from_pdf(uploaded_file):
     try:
         pdf_text = ""
         # Load the PDF file
-        with pdfplumber.open(BytesIO(uploaded_file.read())) as pdf:
-            for page in pdf.pages:
-                pdf_text += page.extract_text() or ""
+        # with pdfplumber.open(BytesIO(uploaded_file.read())) as pdf:
+        #     for page in pdf.pages:
+        #         pdf_text += page.extract_text() or ""
+        
+        with fitz.open(stream=uploaded_file.read(), filetype="pdf") as doc:
+            for page in doc:
+                pdf_text += page.get_text() 
 
         # If no text was extracted, use OCR for images/scans
         # if not pdf_text.strip():
@@ -317,9 +368,9 @@ def student_dashboard():
             try:
                 # Extract text from uploaded PDF using pdfplumber
                 pdf_text = ""
-                with pdfplumber.open(BytesIO(uploaded_file.read())) as pdf:
-                    for page in pdf.pages:
-                        pdf_text += page.extract_text() or ""
+                with fitz.open(stream=uploaded_file.read(), filetype="pdf") as doc:
+                    for page in doc:
+                        pdf_text += page.get_text() 
 
                 if pdf_text.strip():
                     # Save extracted text into the student's `pdf_location` field
