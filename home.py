@@ -7,11 +7,17 @@ import sqlite3
 import os
 import shutil
 import re
+import json
+
+with open("extractor_library.json", "r") as file:
+    skills_data = json.load(file)
+
+skills_list = skills_data["skills_list"]
 
 import google.generativeai as genai
 genai.configure(api_key=os.environ['GEMINI_API_KEY'])
 
-from database_func import add_recruiter, validate_recruiter, recruiter_exists, get_job_descriptions, save_job_description, delete_all_job_descriptions, student_exists, add_student, validate_student, connect_db#, delete_job_description  # Import functions from the database module
+from database_func import add_recruiter, validate_recruiter, recruiter_exists, get_job_descriptions, save_job_description, delete_all_job_descriptions, student_exists, add_student, validate_student, connect_db, extract_skills#, delete_job_description  # Import functions from the database module
 
 # Set page configuration
 st.set_page_config(page_title="SmartMatch", page_icon=":briefcase:", layout="wide")
@@ -121,7 +127,24 @@ def recruiter_dashboard():
             )
             if selected_title:
                 with st.expander(f"**View Job Description: {selected_title}**", expanded=False):
-                    st.write(previous_descriptions[selected_title])  # Display the full description inside the expander
+                    st.write(previous_descriptions[selected_title])  # Display JD description
+                with st.expander(f"**Required Skills: {selected_title}**", expanded=False):
+                    # Fetch and display skills from the database
+                    conn = connect_db()
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "SELECT jd.skills FROM job_descriptions jd JOIN recruiters r ON jd.recruiter_id = r.recruiter_id WHERE r.recruiter_code = ? AND jd.title = ?",
+                        (recruiter_code, selected_title)
+                    )
+                    skills_result = cursor.fetchone()
+                
+                    if skills_result and skills_result[0]:
+                        st.markdown("**Extracted Skills:**")
+                        st.write(skills_result[0])  # Display comma-separated skills
+                    else:
+                        st.info("No skills found for this job description.")
+                    conn.close()
+                    
 
         # Add Job Description Title
         job_title = st.text_input("**Add new job opening**", placeholder="e.g., Software Engineer Intern", key="job_title")
@@ -148,7 +171,11 @@ def recruiter_dashboard():
 
         # Save Job Description Button
         if job_title and job_description and st.button("Save Job Description", key="save_button"):
-            if save_job_description(recruiter_code, job_title, job_description, uploaded_file):
+            # Skills list to compare
+            extracted_skills = extract_skills(job_description, skills_list)
+            
+            # Save job description and extracted skills
+            if save_job_description(recruiter_code, job_title, job_description, uploaded_file, extracted_skills):
                 st.success("Job description saved successfully!")
                 st.rerun()
             else:

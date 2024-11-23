@@ -36,6 +36,7 @@ def create_tables():
             title TEXT,
             description TEXT, 
             jd_pdf_location TEXT DEFAULT NULL,
+            skills TEXT DEFAULT NULL,
             FOREIGN KEY (recruiter_id) REFERENCES recruiters (recruiter_id)
         )
         """
@@ -141,15 +142,29 @@ def student_exists(student_code):
     return exists
 
 
-def save_job_description(recruiter_code, title, job_description, jd_pdf_file = None):
+def extract_skills(text, skills_list):
+    skills = []
+
+    for skill in skills_list:
+        pattern = r"\b{}\b".format(re.escape(skill))
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            skills.append(skill)
+
+    return skills
+
+def save_job_description(recruiter_code, title, job_description, jd_pdf_file=None, skills_list=None):
     conn = connect_db()
     c = conn.cursor()
     try:
+        # Fetch recruiter ID
         c.execute("SELECT recruiter_id FROM recruiters WHERE recruiter_code = ?", (recruiter_code,))
         recruiter = c.fetchone()
         if recruiter:
             recruiter_id = recruiter[0]
             pdf_location = None
+            
+            # Save uploaded PDF
             if jd_pdf_file:
                 pdf_dir = "jd_pdfs"
                 os.makedirs(pdf_dir, exist_ok=True)
@@ -159,9 +174,16 @@ def save_job_description(recruiter_code, title, job_description, jd_pdf_file = N
                     f.write(jd_pdf_file.getbuffer())
                 pdf_location = pdf_file_path
 
+            # Extract skills
+            extracted_skills = []
+            if skills_list:
+                extracted_skills = extract_skills(job_description, skills_list)
+            skills_str = ", ".join(extracted_skills)  # Convert skills list to comma-separated string
+
+            # Insert job description with skills
             c.execute(
-                "INSERT INTO job_descriptions (recruiter_id, title, description, jd_pdf_location) VALUES (?, ?, ?, ?)",
-                (recruiter_id, title, job_description, pdf_location),
+                "INSERT INTO job_descriptions (recruiter_id, title, description, jd_pdf_location, skills) VALUES (?, ?, ?, ?, ?)",
+                (recruiter_id, title, job_description, pdf_location, skills_str),
             )
             conn.commit()
             return True
