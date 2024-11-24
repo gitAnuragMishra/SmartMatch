@@ -8,6 +8,11 @@ import os
 import shutil
 import re
 import json
+import pandas as pd
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+from database_func import add_recruiter, validate_recruiter, recruiter_exists, get_job_descriptions, save_job_description, delete_all_job_descriptions, student_exists, add_student, validate_student, connect_db, extract_skills#, delete_job_description  # Import functions from the database module
+
 
 with open("extractor_library.json", "r") as file:
     skills_data = json.load(file)
@@ -17,7 +22,11 @@ skills_list = skills_data["skills_list"]
 import google.generativeai as genai
 genai.configure(api_key=os.environ['GEMINI_API_KEY'])
 
-from database_func import add_recruiter, validate_recruiter, recruiter_exists, get_job_descriptions, save_job_description, delete_all_job_descriptions, student_exists, add_student, validate_student, connect_db, extract_skills#, delete_job_description  # Import functions from the database module
+def gemini_embedding(text):
+    """Get embedding for text using Gemini API."""
+    response = genai.embed_content(content=text, model="models/text-embedding-004")
+    return response['embedding']
+
 
 # Set page configuration
 st.set_page_config(page_title="SmartMatch", page_icon=":briefcase:", layout="wide")
@@ -108,7 +117,7 @@ def recruiter_dashboard():
 
     # Job Openings Section with Save and Delete Features
     recruiter_code = st.session_state["recruiter_code"]
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3 = st.columns([2, 1.5, 3])
 
     with col1:
         st.subheader("Job Openings")
@@ -139,7 +148,7 @@ def recruiter_dashboard():
                     skills_result = cursor.fetchone()
                 
                     if skills_result and skills_result[0]:
-                        st.markdown("**Extracted Skills:**")
+                        # st.markdown("**Extracted Skills:**")
                         st.write(skills_result[0])  # Display comma-separated skills
                     else:
                         st.info("No skills found for this job description.")
@@ -224,80 +233,194 @@ def recruiter_dashboard():
 
     col4, col5  = st.columns(2)
     with col4:
-        import pandas as pd
-        from sentence_transformers import SentenceTransformer
-        from sklearn.metrics.pairwise import cosine_similarity
-        import numpy as np
+        st.subheader("Shortlist Candidates")
+        st.write("Match candidates to specific job openings based on skills and experience, making hiring decisions faster and more accurate.")
 
-        with col4:
-            st.subheader("Shortlist Candidates")
-            st.write("Match candidates to specific job openings based on skills and experience, making hiring decisions faster and more accurate.")
+        # if selected_title:
+        #     st.write(f"**Job Description:** {selected_title}")
+        #     jd_text = previous_descriptions[selected_title]  # Fetch JD text
 
-            # if selected_title:
-            #     st.write(f"**Job Description:** {selected_title}")
-            #     jd_text = previous_descriptions[selected_title]  # Fetch JD text
+        #     # Fetch resumes for the selected JD
+        #     conn = connect_db()
+        #     cursor = conn.cursor()
+        #     cursor.execute(
+        #         """
+        #         SELECT s.student_code, s.name, rr.resume_text
+        #         FROM recruiter_resumes rr
+        #         JOIN students s ON rr.student_code = s.student_code
+        #         WHERE rr.jd_title = ? AND rr.recruiter_code = ?
+        #         """,
+        #         (selected_title, recruiter_code)
+        #     )
+        #     resumes = cursor.fetchall()
 
-            #     # Fetch resumes for the selected JD
-            #     conn = connect_db()
-            #     cursor = conn.cursor()
-            #     cursor.execute(
-            #         """
-            #         SELECT s.student_code, s.name, rr.resume_text
-            #         FROM recruiter_resumes rr
-            #         JOIN students s ON rr.student_code = s.student_code
-            #         WHERE rr.jd_title = ? AND rr.recruiter_code = ?
-            #         """,
-            #         (selected_title, recruiter_code)
-            #     )
-            #     resumes = cursor.fetchall()
-                
-            #     if resumes:
-            #         # Extract resume texts
-            #         resume_data = [{"Student ID": r[0], "Name": r[1], "Resume": r[2]} for r in resumes]
-            #         resume_df = pd.DataFrame(resume_data)
+        #     if resumes:
+        #         # Extract resume texts
+        #         resume_data = [{"Student ID": r[0], "Name": r[1], "Resume": r[2]} for r in resumes]
 
-            #         # Initialize embedding model
-            #         model = SentenceTransformer("all-MiniLM-L6-v2", cache_folder=r'D:\models')
+        #         # Compute embeddings for JD and resumes using Gemini API
+        #         jd_embedding = gemini_embedding(jd_text)  # Use the embedding function
+        #         jd_skills = extract_skills(jd_text, skills_list)  # Extract JD skills
+        #         resume_scores = []
 
-            #         # Compute embeddings for JD and resumes
-            #         jd_embedding = model.encode([jd_text], convert_to_tensor=True)
-            #         resume_embeddings = model.encode(resume_df["Resume"].tolist(), convert_to_tensor=True)
+        #         for r in resume_data:
+        #             resume_embedding = gemini_embedding(r["Resume"])
+        #             similarity = cosine_similarity([jd_embedding], [resume_embedding])[0][0] * 100
 
-            #         # Calculate cosine similarities
-            #         similarities = cosine_similarity(jd_embedding, resume_embeddings).flatten()
-            #         resume_df["Skill Similarity"] = np.round(similarities * 100, 2)  # Convert to percentage
+        #             # Extract skills from the resume
+        #             resume_skills = extract_skills(r["Resume"], skills_list)
+        #             matching_skills = ", ".join(set(jd_skills).intersection(resume_skills))
 
-            #         # Display the table with similarity scores
-            #         st.write("**Resumes with Skill Similarity:**")
-            #         st.dataframe(resume_df[["Student ID", "Name", "Skill Similarity"]].sort_values("Skill Similarity", ascending=False))
-            #     else:
-            #         st.info("No resumes submitted for the selected job description.")
-            # else:
-            #     st.info("Select a job description to view the corresponding resumes.")
-    
+        #             resume_scores.append({
+        #                 "Student ID": r["Student ID"],
+        #                 "Name": r["Name"],
+        #                 "Resume": r["Resume"],
+        #                 "Resume Score": round(similarity, 2),
+        #                 "Matching Skills": matching_skills
+        #             })
+
+        #         # Display the table with resume scores and matching skills
+        #         st.write("**Resumes with Resume Scores and Matching Skills:**")
+
+        #         resume_df = pd.DataFrame(resume_scores)
+        #         st.dataframe(resume_df[["Student ID", "Name", "Resume Score", "Matching Skills"]].sort_values("Resume Score", ascending=False), use_container_width=True)
+        #     else:
+        #         st.info("No resumes submitted for the selected job description.")
+        # else:
+        #     st.info("Select a job description to view the corresponding resumes.")
+
 
     with col5:
-        st.subheader("Schedule Interviews")
-        st.write("Seamlessly schedule interviews using Google Meet and Calendar integration.")
+        st.subheader("Contact Selected Candidates")
+        st.write("Notify shortlisted candidates about interviews via email.")
+
+        if selected_title:
+            # Fetch candidates for the selected job description
+            cursor.execute(
+                """
+                SELECT s.student_code, s.name, s.email
+                FROM recruiter_resumes rr
+                JOIN students s ON rr.student_code = s.student_code
+                WHERE rr.jd_title = ? AND rr.recruiter_code = ?
+                """,
+                (selected_title, recruiter_code)
+            )
+            candidates = cursor.fetchall()
+            cursor.execute('SELECT email FROM recruiters WHERE recruiter_code = ?', (recruiter_code,))
+            recruiter_email = cursor.fetchone()[0]
+
+            if candidates:
+                # Prepare candidate data
+                candidate_data = [{"Student ID": c[0], "Name": c[1], "Email": c[2]} for c in candidates]
+                candidate_df = pd.DataFrame(candidate_data)
+                candidate_df["Select"] = False
+
+                # Display candidates with checkboxes
+                for idx, row in candidate_df.iterrows():
+                    candidate_df.loc[idx, "Select"] = st.checkbox(f"Select {row['Name']}", key=f"candidate_{row['Student ID']}")
+
+                # Filter selected candidates
+                selected_candidates = candidate_df[candidate_df["Select"]]
+                if not selected_candidates.empty:
+                    st.write("Selected Candidates:")
+                    st.dataframe(selected_candidates[["Student ID", "Name", "Email"]], use_container_width=True)
+
+                    # Predefined email body
+                    gmeet_link = "https://meet.google.com/example-link"  # Replace with your Gmeet generation logic
+                    # email_body = f"""
+                    # Hello,\n
+                    # You have been shortlisted for an interview for the job role {selected_title}.\n
+                    # Please join the meeting using the link below:
+                    # Google Meet Link: {gmeet_link}\n\n
+                    # Best regards,\n{recruiter_email}
+                    # """
+
+                    email_body = f"Hello,\nYou have been shortlisted for an interview for the job role {selected_title}.\nPlease join the meeting using the link below:\nGoogle Meet Link: {gmeet_link} \nRegards"
+                    body = st.text_area("Write your email message:", placeholder="Type your message here...", label_visibility='hidden', value=email_body.strip(), height=200, disabled=False)
+
+
+                    # Display the email body
+                    # body = st.text_area("Email Content", value=email_body.strip(), height=200, disabled=False)
+
+                    if st.button("Send Email"):
+                        # Prepare Gmail link
+                        recipient_emails = ",".join(selected_candidates["Email"].tolist())
+                        
+                        gmail_url = (
+                            f"https://mail.google.com/mail/?view=cm&fs=1&to={recipient_emails}"
+                            f"&su=Interview Invite for {selected_title}&body={body}"
+                        )
+                        # Open Gmail in the browser's new tab
+                        st.markdown(
+                            f'<a href="{gmail_url}" target="_blank">Click here to send the email</a>',
+                            unsafe_allow_html=True
+                        )
+                        
+                else:
+                    st.info("Select at least one candidate to notify.")
+            else:
+                st.info("No candidates available for the selected job description.")
+        else:
+            st.info("Select a job description to view and notify candidates.")
 
     
     st.markdown("---")
-
     # Logout button
     if st.button("Logout", key="logout_button"):
         st.session_state["page"] = "landing"
         st.session_state.pop("recruiter_code", None)
         st.rerun()
+def generate_gmeet_link():
+    return "https://meet.google.com/new"
+
+# import smtplib
+# from email.mime.multipart import MIMEMultipart
+# from email.mime.text import MIMEText
+
+# def schedule_calendar_invite(emails, job_title, gmeet_link):
+#     try:
+#         # Prepare the email content
+#         subject = f"Interview Invite for {job_title}"
+#         body = f"""
+#         Hello,
+
+#         You have been shortlisted for an interview for the job role "{job_title}".
+#         Please join the meeting using the link below:
+
+#         Google Meet Link: {gmeet_link}
+
+#         Best regards,
+#         Recruiter
+#         """
+#         # Join emails into a comma-separated list
+#         recipients = ",".join(emails)
+
+#         # Encode the email body for URLs
+#         encoded_body = body.replace("\n", "%0A").replace(" ", "%20")  # Replace newlines and spaces with URL-safe encodings
+
+#         # Construct the Gmail link
+#         gmail_url = (
+#             f"https://mail.google.com/mail/?view=cm&fs=1&to={recipients}"
+#             f"&su={subject}&body={encoded_body}"
+#         )
+
+#         # Open Gmail in a new tab
+#         st.markdown(
+#             f'<a href="{gmail_url}" target="_blank">Click here to send the email via Gmail</a>',
+#             unsafe_allow_html=True
+#         )
+#         return True
+#     except Exception as e:
+#         st.error(f"An error occurred while preparing the email: {str(e)}")
+#         return False
+
+
+
 
 # Helper function to extract text from a PDF
 def extract_text_from_pdf(uploaded_file):
     try:
         pdf_text = ""
-        # Load the PDF file
-        # with pdfplumber.open(BytesIO(uploaded_file.read())) as pdf:
-        #     for page in pdf.pages:
-        #         pdf_text += page.extract_text() or ""
-        
         with fitz.open(stream=uploaded_file.read(), filetype="pdf") as doc:
             for page in doc:
                 pdf_text += page.get_text() 
@@ -351,7 +474,7 @@ def student_dashboard():
 
             if result:
                 recruiter_email = result[0]
-                st.success("Recruiter found.")
+                st.success("Recruiter found. Fetching job descriptions...")
 
                 # Fetch Job Descriptions for the connected recruiter
                 cursor.execute(
@@ -380,8 +503,7 @@ def student_dashboard():
     previous_text = result[0] if result else None
 
     # Columns for Resume Handling and Recruiter Contact
-    col1, col2 = st.columns(2)
-
+    col1, col2 = st.columns([1, 2])
     with col1:
         st.subheader("Your Resume Text")
         if previous_text:
@@ -393,31 +515,41 @@ def student_dashboard():
 
         if uploaded_file:
             try:
-                # Extract text from uploaded PDF using pdfplumber
+                # Extract text from uploaded PDF
                 pdf_text = ""
                 with fitz.open(stream=uploaded_file.read(), filetype="pdf") as doc:
                     for page in doc:
-                        pdf_text += page.get_text() 
+                        pdf_text += page.get_text()
 
                 if pdf_text.strip():
-                    # Save extracted text into the student's `pdf_location` field
+                    # Extract skills from resume text
+                    extracted_skills = []
+                    if skills_list:
+                        extracted_skills = extract_skills(pdf_text, skills_list)
+                    extracted_skills = list(set(extracted_skills))
+                    extracted_skills_str = ", ".join(extracted_skills)
+
+                    # Save extracted text and skills into the student's `pdf_location` field
                     cursor.execute(
                         "UPDATE students SET pdf_location = ? WHERE student_code = ?",
                         (pdf_text, student_code),
                     )
                     conn.commit()
 
-                    # Display extracted text
+                    # Display extracted text and skills
                     st.markdown("### Extracted Resume Text")
                     st.text_area("Extracted text from your uploaded resume:", value=pdf_text, height=200, disabled=True)
 
-                    st.success("Resume text successfully extracted and saved.")
+                    st.markdown("### Extracted Skills from Resume")
+                    st.write(extracted_skills_str)
+
+                    st.success("Resume text and skills successfully extracted and saved.")
                 else:
                     st.error("The uploaded PDF is empty or unreadable.")
             except Exception as e:
                 st.error(f"An error occurred while processing the PDF: {str(e)}")
 
-        # Display available job descriptions (if any)
+        # Display available job descriptions
         if job_descriptions:
             st.subheader("Available Job Descriptions from Recruiter")
             jd_options = {jd[1]: f"{jd[1]} - {jd[2][:50]}..." for jd in job_descriptions}  # JD title and short description
@@ -425,31 +557,133 @@ def student_dashboard():
         else:
             selected_jd_title = None
 
+        # Buttons for sending and withdrawing applications
+        col_apply, col_withdraw = st.columns(2)
 
-        # Button to send resume to recruiter
-        if st.button("Send Resume to Recruiter"):
-            if recruiter_code and previous_text and selected_jd_title:
-                # Check if a record already exists with the title instead of jd_id
-                cursor.execute(
-                    "SELECT COUNT(*) FROM recruiter_resumes WHERE recruiter_code = ? AND student_code = ? AND jd_title = ?",
-                    (recruiter_code, student_code, selected_jd_title),
-                )
-                record_exists = cursor.fetchone()[0]
-
-                if record_exists:
-                    st.warning("You have already sent your resume for this job description.")
-                else:
-                    # Insert the new record with the job description title
+        with col_apply:
+            if st.button("Send Resume to Recruiter"):
+                if recruiter_code and previous_text and selected_jd_title:
+                    # Check if a record already exists with the title instead of jd_id
                     cursor.execute(
-                        "INSERT INTO recruiter_resumes (recruiter_code, student_code, resume_text, jd_title) VALUES (?, ?, ?, ?)",
-                        (recruiter_code, student_code, previous_text, selected_jd_title),
+                        "SELECT COUNT(*) FROM recruiter_resumes WHERE recruiter_code = ? AND student_code = ? AND jd_title = ?",
+                        (recruiter_code, student_code, selected_jd_title),
                     )
-                    conn.commit()
-                    st.success("Your resume has been sent to the recruiter for the selected job description.")
-            else:
-                st.error("Please upload a resume, connect with a recruiter, and select a job description before sending.")
+                    record_exists = cursor.fetchone()[0]
+
+                    if record_exists:
+                        st.warning("You have already sent your resume for this job description.")
+                    else:
+                        # Insert the new record with the job description title and extracted skills
+                        cursor.execute(
+                            """
+                            INSERT INTO recruiter_resumes 
+                            (recruiter_code, student_code, resume_text, jd_title, extracted_resume_skills) 
+                            VALUES (?, ?, ?, ?, ?)
+                            """,
+                            (recruiter_code, student_code, previous_text, selected_jd_title, extracted_skills_str),
+                        )
+                        conn.commit()
+                        st.success("Your resume and extracted skills have been sent to the recruiter for the selected job description.")
+                else:
+                    st.error("Please upload a resume, connect with a recruiter, and select a job description before sending.")
+
+        with col_withdraw:
+            if st.button("Withdraw Application"):
+                if recruiter_code and selected_jd_title:
+                    # Check if a record exists to withdraw
+                    cursor.execute(
+                        "SELECT COUNT(*) FROM recruiter_resumes WHERE recruiter_code = ? AND student_code = ? AND jd_title = ?",
+                        (recruiter_code, student_code, selected_jd_title),
+                    )
+                    record_exists = cursor.fetchone()[0]
+
+                    if record_exists:
+                        # Delete the record for the selected job description
+                        cursor.execute(
+                            "DELETE FROM recruiter_resumes WHERE recruiter_code = ? AND student_code = ? AND jd_title = ?",
+                            (recruiter_code, student_code, selected_jd_title),
+                        )
+                        conn.commit()
+                        st.success("Your application for the selected job description has been withdrawn.")
+                    else:
+                        st.warning("No application found to withdraw for the selected job description.")
+                else:
+                    st.error("Please connect with a recruiter and select a job description to withdraw your application.")
 
     with col2:
+        st.subheader("Match your Resume to a Job Description")
+        st.write(
+            "Select job descriptions from your recruiter and match your resume to them. "
+            "This will help you find the best fit for your skills and experience."
+        )
+
+        if recruiter_code:
+            # Validate recruiter existence
+            if recruiter_exists(recruiter_code):
+                
+
+                # Fetch job descriptions for the recruiter
+                conn = connect_db()
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT title, skills 
+                    FROM job_descriptions 
+                    JOIN recruiters ON job_descriptions.recruiter_id = recruiters.recruiter_id 
+                    WHERE recruiters.recruiter_code = ?
+                """, (recruiter_code,))
+                job_descriptions = cursor.fetchall()
+
+                # Fetch the student's resume
+                student_code = st.session_state.get("student_code")
+                cursor.execute("SELECT pdf_location FROM students WHERE student_code = ?", (student_code,))
+                result = cursor.fetchone()
+                conn.close()
+
+                if not result or not result[0]:
+                    st.error("No resume uploaded. Please upload your resume first.")
+                else:
+                    # Extract student's skills from their resume
+                    resume_text = result[0]
+                    student_skills = extract_skills(resume_text, skills_list)
+
+                    if not student_skills:
+                        st.warning("No skills could be extracted from your resume.")
+                    else:
+                        # Calculate compatibility
+                        compatibility_data = []
+                        for jd_title, jd_skills in job_descriptions:
+                            jd_skills_list = jd_skills.split(", ") if jd_skills else []
+                            common_skills = set(student_skills).intersection(set(jd_skills_list))
+                            compatibility_score = round(len(common_skills) / len(jd_skills_list) * 100, 2) if jd_skills_list else 0
+                            abs_compatibility = '✅' if compatibility_score >= 10 else '❌'
+                            compatibility_data.append({
+                                "Job Title": jd_title,
+                                "Required Skills": ", ".join(jd_skills_list),
+                                # "Your Skills": ", ".join(student_skills),
+                                "Common Skills": ", ".join(common_skills),
+                                "Compatibility": abs_compatibility,
+                            })
+                        st.write('**Your Skills:**')
+                        st.write(', '.join(student_skills))
+                        # Display results in a tabular format
+                        if compatibility_data:
+                            import pandas as pd
+                            compatibility_df = pd.DataFrame(compatibility_data)
+                            st.dataframe(compatibility_df)
+                        else:
+                            st.info("No job descriptions found or no compatible skills.")
+            else:
+                st.error("Invalid recruiter code.")
+        else:
+            st.info("Please enter a recruiter code to proceed.")
+
+
+    conn.close()
+
+    st.markdown("---")
+    col1, col2 = st.columns(2)
+
+    with col1:
         st.subheader("Contact Recruiter")
         if recruiter_email:
             st.write(f"Compose an email to the recruiter below. Email: {recruiter_email}")
@@ -470,10 +704,11 @@ def student_dashboard():
                 else:
                     st.error("Email body cannot be empty.")
 
-    conn.close()
-
-    st.markdown("---")
-
+    with col2:
+        st.subheader("AI student support")
+        if st.button("Chat with AI"):
+            None
+    st.markdown('---')
     # Back to Home button
     if st.button("Back to Home"):
         st.session_state['page'] = 'landing'

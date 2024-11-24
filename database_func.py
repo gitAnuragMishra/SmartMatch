@@ -64,6 +64,7 @@ def create_tables():
             resume_text TEXT NOT NULL,
             jd_title TEXT NOT NULL,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            extracted_resume_skills TEXT DEFAULT NULL,
             FOREIGN KEY (recruiter_code) REFERENCES recruiters(recruiter_code),
             FOREIGN KEY (student_code) REFERENCES students(student_code)
         )
@@ -178,6 +179,7 @@ def save_job_description(recruiter_code, title, job_description, jd_pdf_file=Non
             extracted_skills = []
             if skills_list:
                 extracted_skills = extract_skills(job_description, skills_list)
+            extracted_skills = list(set(extracted_skills))
             skills_str = ", ".join(extracted_skills)  # Convert skills list to comma-separated string
 
             # Insert job description with skills

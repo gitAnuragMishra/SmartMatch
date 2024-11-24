@@ -45,7 +45,7 @@
     "Multi-Factor Authentication (MFA)", "Blockchain", "Cryptocurrency", "Decentralized Finance (DeFi)", "Smart Contracts", "Web3", "Non-Fungible Tokens (NFTs)", 
     "Rust", "Go (Golang)", "TypeScript", "Svelte", "Vue.js", "Electron.js", "Deno", "Bash Scripting", "Perl", "Groovy", "Scala",
     "ColdFusion", "LightGBM", "CatBoost", "AutoML", "H2O.ai", "OpenAI APIs", "Hugging Face", "Transformers", "Few-Shot Learning", "Retrieval-Augmented Generation",
-    "Zero-Shot Learning", "Transfer Learning", "Bayesian Optimization", "Hyperparameter Tuning", "Explainable AI (XAI)", "PyTorch", "TensorFlow", "PyTorch Lightning",
+    "Zero-Shot Learning", "Transfer Learning", "Bayesian Optimization", "Hyperparameter Tuning", "Explainable AI (XAI)", "TensorFlow", "PyTorch Lightning",
     "Federated Learning", "Edge AI", "Alteryx", "KNIME", "RapidMiner", "DataRobot", "Snowflake", "Azure Synapse Analytics", "HuggingFace",
     "Data Lineage", "Time Series Analysis", "Anomaly Detection", "Hypothesis Testing", "Terraform", "Ansible", "Puppet", "Chef",
     "Jenkins", "Spinnaker", "Istio", "Prometheus", "Grafana", "Elastic Stack (ELK)", "Consul", "OpenShift", "CloudFormation", "PyTorch", "RAG",
