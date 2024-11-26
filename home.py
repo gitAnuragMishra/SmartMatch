@@ -13,7 +13,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from database_func import add_recruiter, validate_recruiter, recruiter_exists, get_job_descriptions, save_job_description, delete_all_job_descriptions, student_exists, add_student, validate_student, connect_db, extract_skills#, delete_job_description  # Import functions from the database module
 
-
 with open("extractor_library.json", "r") as file:
     skills_data = json.load(file)
 
@@ -22,8 +21,11 @@ skills_list = skills_data["skills_list"]
 import google.generativeai as genai
 genai.configure(api_key=os.environ['GEMINI_API_KEY'])
 
+
+
+
 def gemini_embedding(text):
-    """Get embedding for text using Gemini API."""
+    
     response = genai.embed_content(content=text, model="models/text-embedding-004")
     return response['embedding']
 
@@ -236,58 +238,66 @@ def recruiter_dashboard():
         st.subheader("Shortlist Candidates")
         st.write("Match candidates to specific job openings based on skills and experience, making hiring decisions faster and more accurate.")
 
-        # if selected_title:
-        #     st.write(f"**Job Description:** {selected_title}")
-        #     jd_text = previous_descriptions[selected_title]  # Fetch JD text
+        if selected_title:
+            st.write(f"**Job Description:** {selected_title}")
+            jd_text = previous_descriptions[selected_title]  # Fetch JD text
 
-        #     # Fetch resumes for the selected JD
-        #     conn = connect_db()
-        #     cursor = conn.cursor()
-        #     cursor.execute(
-        #         """
-        #         SELECT s.student_code, s.name, rr.resume_text
-        #         FROM recruiter_resumes rr
-        #         JOIN students s ON rr.student_code = s.student_code
-        #         WHERE rr.jd_title = ? AND rr.recruiter_code = ?
-        #         """,
-        #         (selected_title, recruiter_code)
-        #     )
-        #     resumes = cursor.fetchall()
+            # Fetch resumes for the selected JD
+            conn = connect_db()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT s.student_code, s.name, rr.resume_text
+                FROM recruiter_resumes rr
+                JOIN students s ON rr.student_code = s.student_code
+                WHERE rr.jd_title = ? AND rr.recruiter_code = ?
+                """,
+                (selected_title, recruiter_code)
+            )
+            resumes = cursor.fetchall()
 
-        #     if resumes:
-        #         # Extract resume texts
-        #         resume_data = [{"Student ID": r[0], "Name": r[1], "Resume": r[2]} for r in resumes]
+            if resumes:
+                # Extract resume texts
+                resume_data = [{"Student ID": r[0], "Name": r[1], "Resume": r[2]} for r in resumes]
 
-        #         # Compute embeddings for JD and resumes using Gemini API
-        #         jd_embedding = gemini_embedding(jd_text)  # Use the embedding function
-        #         jd_skills = extract_skills(jd_text, skills_list)  # Extract JD skills
-        #         resume_scores = []
+                # Compute embeddings for JD and resumes using Gemini API
+                # jd_embedding = gemini_embedding(jd_text)  # Use the embedding function
+                jd_skills = extract_skills(jd_text, skills_list)  # Extract JD skills
+                jd_skills_text = ", ".join(jd_skills)
+                jd_embedding = gemini_embedding(jd_skills_text)
 
-        #         for r in resume_data:
-        #             resume_embedding = gemini_embedding(r["Resume"])
-        #             similarity = cosine_similarity([jd_embedding], [resume_embedding])[0][0] * 100
+                resume_scores = []
 
-        #             # Extract skills from the resume
-        #             resume_skills = extract_skills(r["Resume"], skills_list)
-        #             matching_skills = ", ".join(set(jd_skills).intersection(resume_skills))
+                for r in resume_data:
+                    # resume_embedding = gemini_embedding(r["Resume"])
+                    # similarity = cosine_similarity([jd_embedding], [resume_embedding])[0][0] * 100
 
-        #             resume_scores.append({
-        #                 "Student ID": r["Student ID"],
-        #                 "Name": r["Name"],
-        #                 "Resume": r["Resume"],
-        #                 "Resume Score": round(similarity, 2),
-        #                 "Matching Skills": matching_skills
-        #             })
+                    # Extract skills from the resume
+                    resume_skills = extract_skills(r["Resume"], skills_list)
+                    resume_skills_text = ", ".join(resume_skills)
+                    resume_embedding = gemini_embedding(resume_skills_text)
 
-        #         # Display the table with resume scores and matching skills
-        #         st.write("**Resumes with Resume Scores and Matching Skills:**")
+                    similarity = cosine_similarity([jd_embedding], [resume_embedding])[0][0]*100
 
-        #         resume_df = pd.DataFrame(resume_scores)
-        #         st.dataframe(resume_df[["Student ID", "Name", "Resume Score", "Matching Skills"]].sort_values("Resume Score", ascending=False), use_container_width=True)
-        #     else:
-        #         st.info("No resumes submitted for the selected job description.")
-        # else:
-        #     st.info("Select a job description to view the corresponding resumes.")
+                    matching_skills = ", ".join(set(jd_skills).intersection(resume_skills))
+
+                    resume_scores.append({
+                        "Student ID": r["Student ID"],
+                        "Name": r["Name"],
+                        "Resume": r["Resume"],
+                        "Resume Score": round(similarity, 2),
+                        "Matching Skills": matching_skills
+                    })
+
+                # Display the table with resume scores and matching skills
+                st.write("**Resumes with Resume Scores and Matching Skills:**")
+
+                resume_df = pd.DataFrame(resume_scores)
+                st.dataframe(resume_df[["Student ID", "Name", "Resume Score", "Matching Skills"]].sort_values("Resume Score", ascending=False), use_container_width=True)
+            else:
+                st.info("No resumes submitted for the selected job description.")
+        else:
+            st.info("Select a job description to view the corresponding resumes.")
 
 
     with col5:
@@ -372,47 +382,6 @@ def recruiter_dashboard():
         st.rerun()
 def generate_gmeet_link():
     return "https://meet.google.com/new"
-
-# import smtplib
-# from email.mime.multipart import MIMEMultipart
-# from email.mime.text import MIMEText
-
-# def schedule_calendar_invite(emails, job_title, gmeet_link):
-#     try:
-#         # Prepare the email content
-#         subject = f"Interview Invite for {job_title}"
-#         body = f"""
-#         Hello,
-
-#         You have been shortlisted for an interview for the job role "{job_title}".
-#         Please join the meeting using the link below:
-
-#         Google Meet Link: {gmeet_link}
-
-#         Best regards,
-#         Recruiter
-#         """
-#         # Join emails into a comma-separated list
-#         recipients = ",".join(emails)
-
-#         # Encode the email body for URLs
-#         encoded_body = body.replace("\n", "%0A").replace(" ", "%20")  # Replace newlines and spaces with URL-safe encodings
-
-#         # Construct the Gmail link
-#         gmail_url = (
-#             f"https://mail.google.com/mail/?view=cm&fs=1&to={recipients}"
-#             f"&su={subject}&body={encoded_body}"
-#         )
-
-#         # Open Gmail in a new tab
-#         st.markdown(
-#             f'<a href="{gmail_url}" target="_blank">Click here to send the email via Gmail</a>',
-#             unsafe_allow_html=True
-#         )
-#         return True
-#     except Exception as e:
-#         st.error(f"An error occurred while preparing the email: {str(e)}")
-#         return False
 
 
 
@@ -620,8 +589,6 @@ def student_dashboard():
         if recruiter_code:
             # Validate recruiter existence
             if recruiter_exists(recruiter_code):
-                
-
                 # Fetch job descriptions for the recruiter
                 conn = connect_db()
                 cursor = conn.cursor()
@@ -651,17 +618,25 @@ def student_dashboard():
                     else:
                         # Calculate compatibility
                         compatibility_data = []
+                        student_embedding = gemini_embedding(", ".join(student_skills)) 
                         for jd_title, jd_skills in job_descriptions:
                             jd_skills_list = jd_skills.split(", ") if jd_skills else []
+                            jd_embedding = gemini_embedding(", ".join(jd_skills_list)) 
+
                             common_skills = set(student_skills).intersection(set(jd_skills_list))
                             compatibility_score = round(len(common_skills) / len(jd_skills_list) * 100, 2) if jd_skills_list else 0
                             abs_compatibility = '✅' if compatibility_score >= 10 else '❌'
+
+                            similarity = cosine_similarity([student_embedding], [jd_embedding])[0][0] * 100
+
+                        # Compute cosine similarity
                             compatibility_data.append({
                                 "Job Title": jd_title,
                                 "Required Skills": ", ".join(jd_skills_list),
                                 # "Your Skills": ", ".join(student_skills),
                                 "Common Skills": ", ".join(common_skills),
                                 "Compatibility": abs_compatibility,
+                                "Resume Score": round(similarity, 2)
                             })
                         st.write('**Your Skills:**')
                         st.write(', '.join(student_skills))
@@ -669,7 +644,7 @@ def student_dashboard():
                         if compatibility_data:
                             import pandas as pd
                             compatibility_df = pd.DataFrame(compatibility_data)
-                            st.dataframe(compatibility_df)
+                            st.dataframe(compatibility_df[['Job Title', 'Required Skills', 'Common Skills', 'Compatibility', 'Resume Score']].sort_values(by='Resume Score', ascending=False) , use_container_width=True)
                         else:
                             st.info("No job descriptions found or no compatible skills.")
             else:
