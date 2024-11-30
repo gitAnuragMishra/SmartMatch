@@ -5,3 +5,4 @@ smartmatch.db
 jd_pdfs/
 .env
 chroma_db/
+chroma_db_recruiter/

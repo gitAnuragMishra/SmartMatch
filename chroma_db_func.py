@@ -33,7 +33,7 @@ def fetch_job_descriptions(recruiter_code):
     return [{"title": row[0], "description": row[1], "skills": row[2]} for row in data]
 
 
-def fetch_resumes(recruiter_code, selected_title):
+def fetch_resumes(recruiter_code, job_title):
     conn = connect_db()
     cursor = conn.cursor()
     cursor.execute("""
@@ -41,7 +41,7 @@ def fetch_resumes(recruiter_code, selected_title):
         FROM recruiter_resumes rr
         JOIN students s ON rr.student_code = s.student_code
         WHERE rr.jd_title = ? AND rr.recruiter_code = ?
-    """, (selected_title, recruiter_code))
+    """, (job_title, recruiter_code))
     data = cursor.fetchall()
     conn.close()
     return [{"student_code": row[0], "name": row[1], "resume_text": row[2]} for row in data]
@@ -83,4 +83,24 @@ def index_database_data_for_student(recruiter_code, student_code, chroma_collect
         )
     else:
         st.write(f"No resume found for student_code: {student_code}")
+
+def index_database_data_for_recruiter(recruiter_code, chroma_collection):
+    # Fetch all job descriptions for the recruiter
+    job_descriptions = fetch_job_descriptions(recruiter_code)
+    
+    for jd in job_descriptions:
+        chroma_collection.add(
+            ids=[f"jd_{jd['title']}"],
+            documents=[jd["description"]],
+        )
+    
+    # Fetch all resumes applied to the recruiter
+    for jd in job_descriptions:
+        resumes = fetch_resumes(recruiter_code, jd["title"])
+        for resume in resumes:
+            chroma_collection.add(
+                ids=[f"resume_{resume['student_code']}"],
+                documents=[resume["resume_text"]],
+            )
+
     

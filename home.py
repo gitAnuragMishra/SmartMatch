@@ -1,19 +1,19 @@
 import streamlit as st
 import fitz
-from io import BytesIO
 import pytesseract
 from PIL import Image
 import sqlite3
 import os
 import shutil
 import atexit
+import time
 import re
 import json
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from database_func import add_recruiter, validate_recruiter, recruiter_exists, get_job_descriptions, save_job_description, delete_all_job_descriptions, student_exists, add_student, validate_student, connect_db, extract_skills#, delete_job_description  # Import functions from the database module
-from chroma_db_func import index_database_data_for_student, GeminiEmbeddingFunction
+from chroma_db_func import index_database_data_for_student, index_database_data_for_recruiter, GeminiEmbeddingFunction
 import chromadb
 # from chromadb.utils import embedding_functions
 from chromadb.config import Settings
@@ -52,7 +52,7 @@ def landing_page():
     st.markdown("---")
     
     # Overview sections in columns
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.subheader(":clipboard: Overview")
         st.write("Gain insights into the recruitment process, view current job openings, candidate status, and performance metrics.")
@@ -62,7 +62,9 @@ def landing_page():
     with col3:
         st.subheader(":calendar: Interview Scheduling")
         st.write("Seamlessly manage interview schedules and track the progress of each candidate in the recruitment pipeline.")
-    
+    with col4:
+        st.subheader(":robot_face: AI chat assistant")
+        st.write("Engage with AI chat assistant to get quick answers about resumes and job posting details.")
     st.markdown("---")
     st.header("Choose Your Role")
     
@@ -242,7 +244,7 @@ def recruiter_dashboard():
     with col3:
 
         st.subheader("Shortlist Candidates")
-        st.write("Match candidates to specific job openings based on skills and experience, making hiring decisions faster and more accurate.")
+        st.write("Match candidates to specific job openings based on their relevant skills and resume scores.")
 
         if selected_title:
             st.write(f"**Job Description:** {selected_title}")
@@ -309,10 +311,63 @@ def recruiter_dashboard():
     st.markdown("---")
 
     col4, col5  = st.columns(2)
+
     with col4:
-        st.subheader("AI Recruiter Assistant")
-        st.write("Chat with the recruiter bot for automated insights and assistance.")
-        
+        if "chat_history" not in st.session_state:
+            st.session_state["chat_history"] = []
+
+        st.subheader("AI Recruiter Support Chat")
+        recruiter_code = recruiter_code
+        user_query = st.text_area("Ask about candidates' resumes or job descriptions:")
+
+        embedding_function = GeminiEmbeddingFunction()
+
+        if recruiter_code:
+            recruiter_client = chromadb.PersistentClient(path="chroma_db_recruiter")
+            collection = recruiter_client.get_or_create_collection(
+                name=f"recruiter_{recruiter_code}",
+                embedding_function=embedding_function
+            )
+
+            # Index data if not already done
+            collection_count = collection.count()
+            if collection_count == 0:
+                st.write("Indexing data for recruiter...")
+                index_database_data_for_recruiter(recruiter_code, collection)
+                collection_count = collection.count()
+
+            if st.button("Send") and user_query:
+                # Query ChromaDB
+                results = collection.query(query_texts=[user_query], n_results = collection_count)
+                # st.write(results)
+
+
+                context = "\n".join(results["documents"][0])
+                # st.write(context)
+                prompt = f"""
+                You are an assistant helping a recruiter with resumes submitted to him and his job postings. Below are the job descriptions and resumes:
+
+                {context}
+
+                Question: {user_query}
+                Answer as a helpful assistant and help him select best matching candidates for interviews.
+                """
+                model = genai.GenerativeModel("models/gemini-1.5-flash-8b")
+                if "gemini_chat" not in st.session_state:
+                    st.session_state["gemini_chat"] = model.start_chat(history=[])
+
+                chat = st.session_state["gemini_chat"]
+                response = chat.send_message(prompt)
+
+
+                st.session_state["chat_history"].append({"user": user_query, "ai": response.text})
+                with st.container():
+                    for chat in st.session_state["chat_history"]:
+                        st.write(f"*🧑‍🎓:* {chat['user']}")
+                        st.write(f"*🤖:* {chat['ai']}")
+                        st.markdown("---")
+
+
 
     with col5:
         st.subheader("Contact Selected Candidates")
@@ -391,11 +446,20 @@ def recruiter_dashboard():
     st.markdown("---")
     # Logout button
     if st.button("Logout", key="logout_button"):
+        if recruiter_code:
+            try:
+                recruiter_client.delete_collection(name=f"recruiter_{recruiter_code}")
+                print("ChromaDB collection deleted successfully.")
+            except Exception as e:
+                st.error(f"Failed to delete ChromaDB collection: {e}")
+
+        # Clear chat history
+        st.session_state.pop("chat_history", None)
+        st.session_state.pop("gemini_chat", None)
+
         st.session_state["page"] = "landing"
         st.session_state.pop("recruiter_code", None)
         st.rerun()
-def generate_gmeet_link():
-    return "https://meet.google.com/new"
 
 
 
@@ -486,7 +550,7 @@ def student_dashboard():
     previous_text = result[0] if result else None
 
     # Columns for Resume Handling and Recruiter Contact
-    col1, col2 = st.columns([1, 2])
+    col1, col2 = st.columns([2, 3])
     with col1:
         st.subheader("Your Resume Text")
         if previous_text:
@@ -670,7 +734,7 @@ def student_dashboard():
     conn.close()
 
     st.markdown("---")
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns([2, 3])
 
     with col1:
         st.subheader("Contact Recruiter")
@@ -711,13 +775,16 @@ def student_dashboard():
             )
 
             # Index data if not already done
-            if not collection.count():
-                st.write("Indexing data for recruiter...")
+            collection_count = collection.count()
+            if collection_count == 0:
+                st.write("Indexing data for candidate...")
                 index_database_data_for_student(recruiter_code, student_code, collection)
-
+                collection_count = collection.count()
+                
+                
             if st.button("Send") and user_query:
                 # Query ChromaDB
-                results = collection.query(query_texts=[user_query], n_results = 5)
+                results = collection.query(query_texts=[user_query], n_results = collection_count)
 
 
                 context = "\n".join(results["documents"][0])
@@ -739,13 +806,15 @@ def student_dashboard():
 
 
                 st.session_state["chat_history"].append({"user": user_query, "ai": response.text})
-                for chat in st.session_state["chat_history"]:
-                    
-                    st.write(f"**You:** {chat['user']}")
-                    st.write(f"**AI:** {chat['ai']}")
+                with st.container():
+                    for chat in st.session_state["chat_history"]:
+                        st.write(f"*🧑‍🎓:* {chat['user']}")
+                        st.write(f"*🤖:* {chat['ai']}")
+                        st.markdown("---")
 
-            st.markdown('---')
-            # Back to Home button
+            
+    # Back to Home button
+    st.markdown('---')
     if st.button("Back to Home"):
         # Delete ChromaDB collection for the current recruiter
         if recruiter_code:
@@ -762,13 +831,26 @@ def student_dashboard():
         # Navigate back to the home page
         st.session_state['page'] = 'landing'
         st.rerun()
+
+
+
 def clear_chroma_db():
     """Function to clear the ChromaDB database."""
-    if os.path.exists('chroma_db'):
+    if os.path.exists('chroma_db') :
         shutil.rmtree('chroma_db')
-        print("ChromaDB database cleared.")
+        print("ChromaDB student databases cleared.")
+    if os.path.exists('chroma_db_recruiter'):
+        shutil.rmtree('chroma_db_recruiter')
+        print("ChromaDB recruiter databases cleared.")
 
 # Register the cleanup function to be called at application exit
+
+# def wait():
+#     time.sleep(2)
+
+
+# atexit.register(wait)
+# time.sleep(1)
 atexit.register(clear_chroma_db)
 
 
