@@ -6,16 +6,15 @@ from PIL import Image
 import sqlite3
 import os
 import shutil
+import atexit
 import re
 import json
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from database_func import add_recruiter, validate_recruiter, recruiter_exists, get_job_descriptions, save_job_description, delete_all_job_descriptions, student_exists, add_student, validate_student, connect_db, extract_skills#, delete_job_description  # Import functions from the database module
-from chroma_db_func import index_database_data, GeminiEmbeddingFunction
-
+from chroma_db_func import index_database_data_for_student, GeminiEmbeddingFunction
 import chromadb
-from chromadb import Client
 # from chromadb.utils import embedding_functions
 from chromadb.config import Settings
 
@@ -33,8 +32,6 @@ with open("extractor_library.json", "r") as file:
     skills_data = json.load(file)
 
 skills_list = skills_data["skills_list"]
-
-
 
 
 
@@ -243,13 +240,7 @@ def recruiter_dashboard():
             st.info("Select a job description to view the corresponding resumes.")
 
     with col3:
-        st.subheader("AI Recruiter Assistant")
-        st.write("Chat with the recruiter bot for automated insights and assistance.")
 
-    st.markdown("---")
-
-    col4, col5  = st.columns(2)
-    with col4:
         st.subheader("Shortlist Candidates")
         st.write("Match candidates to specific job openings based on skills and experience, making hiring decisions faster and more accurate.")
 
@@ -314,6 +305,14 @@ def recruiter_dashboard():
         else:
             st.info("Select a job description to view the corresponding resumes.")
 
+
+    st.markdown("---")
+
+    col4, col5  = st.columns(2)
+    with col4:
+        st.subheader("AI Recruiter Assistant")
+        st.write("Chat with the recruiter bot for automated insights and assistance.")
+        
 
     with col5:
         st.subheader("Contact Selected Candidates")
@@ -417,10 +416,10 @@ def extract_text_from_pdf(uploaded_file):
         st.error("Error reading PDF file.")
         return None
 
-# OCR function for image-based PDFs
+# # OCR function for image-based PDFs
 # def ocr_pdf(uploaded_file):
 #     pdf_images = []
-#     with pdfplumber.open(BytesIO(uploaded_file.read())) as pdf:
+#     with fitz.open(stream=uploaded_file, filetype="pdf") as pdf:
 #         for page in pdf.pages:
 #             img = page.to_image()
 #             pdf_images.append(img)
@@ -430,8 +429,8 @@ def extract_text_from_pdf(uploaded_file):
 #     for img in pdf_images:
 #         ocr_text += pytesseract.image_to_string(img)
 #     return ocr_text
-# Student Page
 
+# Student Page
 def student_dashboard():
     # Display a welcome message with the student's name
     if "student_name" in st.session_state:
@@ -601,71 +600,71 @@ def student_dashboard():
             "This will help you find the best fit for your skills and experience."
         )
 
-        # if recruiter_code:
-        #     # Validate recruiter existence
-        #     if recruiter_exists(recruiter_code):
-        #         # Fetch job descriptions for the recruiter
-        #         conn = connect_db()
-        #         cursor = conn.cursor()
-        #         cursor.execute("""
-        #             SELECT title, skills 
-        #             FROM job_descriptions 
-        #             JOIN recruiters ON job_descriptions.recruiter_id = recruiters.recruiter_id 
-        #             WHERE recruiters.recruiter_code = ?
-        #         """, (recruiter_code,))
-        #         job_descriptions = cursor.fetchall()
+        if recruiter_code:
+            # Validate recruiter existence
+            if recruiter_exists(recruiter_code):
+                # Fetch job descriptions for the recruiter
+                conn = connect_db()
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT title, skills 
+                    FROM job_descriptions 
+                    JOIN recruiters ON job_descriptions.recruiter_id = recruiters.recruiter_id 
+                    WHERE recruiters.recruiter_code = ?
+                """, (recruiter_code,))
+                job_descriptions = cursor.fetchall()
 
-        #         # Fetch the student's resume
-        #         student_code = st.session_state.get("student_code")
-        #         cursor.execute("SELECT pdf_location FROM students WHERE student_code = ?", (student_code,))
-        #         result = cursor.fetchone()
-        #         conn.close()
+                # Fetch the student's resume
+                student_code = st.session_state.get("student_code")
+                cursor.execute("SELECT pdf_location FROM students WHERE student_code = ?", (student_code,))
+                result = cursor.fetchone()
+                conn.close()
 
-        #         if not result or not result[0]:
-        #             st.error("No resume uploaded. Please upload your resume first.")
-        #         else:
-        #             # Extract student's skills from their resume
-        #             resume_text = result[0]
-        #             student_skills = extract_skills(resume_text, skills_list)
+                if not result or not result[0]:
+                    st.error("No resume uploaded. Please upload your resume first.")
+                else:
+                    # Extract student's skills from their resume
+                    resume_text = result[0]
+                    student_skills = extract_skills(resume_text, skills_list)
 
-        #             if not student_skills:
-        #                 st.warning("No skills could be extracted from your resume.")
-        #             else:
-        #                 # Calculate compatibility
-        #                 compatibility_data = []
-        #                 student_embedding = gemini_embedding(", ".join(student_skills)) 
-        #                 for jd_title, jd_skills in job_descriptions:
-        #                     jd_skills_list = jd_skills.split(", ") if jd_skills else []
-        #                     jd_embedding = gemini_embedding(", ".join(jd_skills_list)) 
+                    if not student_skills:
+                        st.warning("No skills could be extracted from your resume.")
+                    else:
+                        # Calculate compatibility
+                        compatibility_data = []
+                        student_embedding = gemini_embedding(", ".join(student_skills)) 
+                        for jd_title, jd_skills in job_descriptions:
+                            jd_skills_list = jd_skills.split(", ") if jd_skills else []
+                            jd_embedding = gemini_embedding(", ".join(jd_skills_list)) 
 
-        #                     common_skills = set(student_skills).intersection(set(jd_skills_list))
-        #                     compatibility_score = round(len(common_skills) / len(jd_skills_list) * 100, 2) if jd_skills_list else 0
-        #                     abs_compatibility = '✅' if compatibility_score >= 10 else '❌'
+                            common_skills = set(student_skills).intersection(set(jd_skills_list))
+                            compatibility_score = round(len(common_skills) / len(jd_skills_list) * 100, 2) if jd_skills_list else 0
+                            abs_compatibility = '✅' if compatibility_score >= 10 else '❌'
 
-        #                     similarity = cosine_similarity([student_embedding], [jd_embedding])[0][0] * 100
+                            similarity = cosine_similarity([student_embedding], [jd_embedding])[0][0] * 100
 
-        #                 # Compute cosine similarity
-        #                     compatibility_data.append({
-        #                         "Job Title": jd_title,
-        #                         "Required Skills": ", ".join(jd_skills_list),
-        #                         # "Your Skills": ", ".join(student_skills),
-        #                         "Common Skills": ", ".join(common_skills),
-        #                         "Compatibility": abs_compatibility,
-        #                         "Resume Score": round(similarity, 2)
-        #                     })
-        #                 st.write('**Your Skills:**')
-        #                 st.write(', '.join(student_skills))
-        #                 # Display results in a tabular format
-        #                 if compatibility_data:
-        #                     import pandas as pd
-        #                     compatibility_df = pd.DataFrame(compatibility_data)
-        #                     st.dataframe(compatibility_df[['Job Title', 'Required Skills', 'Common Skills', 'Compatibility', 'Resume Score']].sort_values(by='Resume Score', ascending=False) , use_container_width=True)
-        #                 else:
-        #                     st.info("No job descriptions found or no compatible skills.")
-        #     else:
-        #         st.error("Invalid recruiter code.")
-        # else:
-        #     st.info("Please enter a recruiter code to proceed.")
+                        # Compute cosine similarity
+                            compatibility_data.append({
+                                "Job Title": jd_title,
+                                "Required Skills": ", ".join(jd_skills_list),
+                                # "Your Skills": ", ".join(student_skills),
+                                "Common Skills": ", ".join(common_skills),
+                                "Compatibility": abs_compatibility,
+                                "Resume Score": round(similarity, 2)
+                            })
+                        st.write('**Your Skills:**')
+                        st.write(', '.join(student_skills))
+                        # Display results in a tabular format
+                        if compatibility_data:
+                            import pandas as pd
+                            compatibility_df = pd.DataFrame(compatibility_data)
+                            st.dataframe(compatibility_df[['Job Title', 'Required Skills', 'Common Skills', 'Compatibility', 'Resume Score']].sort_values(by='Resume Score', ascending=False) , use_container_width=True)
+                        else:
+                            st.info("No job descriptions found or no compatible skills.")
+            else:
+                st.error("Invalid recruiter code.")
+        else:
+            st.info("Please enter a recruiter code to proceed.")
 
 
     conn.close()
@@ -699,11 +698,13 @@ def student_dashboard():
             st.session_state["chat_history"] = []
 
         st.subheader("AI Student Support Chat")
-        user_query = st.text_input("Ask a question about your resume or job descriptions:")
+        recruiter_code = recruiter_code
+        user_query = st.text_area("Ask a question about resumes or job descriptions:")
+
         embedding_function = GeminiEmbeddingFunction()
+
         if recruiter_code:
-            # Initialize vector database
-            client = chromadb.Client(settings)
+            client = chromadb.PersistentClient(path="chroma_db")
             collection = client.get_or_create_collection(
                 name=f"recruiter_{recruiter_code}",
                 embedding_function=embedding_function
@@ -711,43 +712,65 @@ def student_dashboard():
 
             # Index data if not already done
             if not collection.count():
-                index_database_data(recruiter_code, collection)
+                st.write("Indexing data for recruiter...")
+                index_database_data_for_student(recruiter_code, student_code, collection)
 
-            if user_query:
+            if st.button("Send") and user_query:
                 # Query ChromaDB
-                results = collection.query(query_texts=[user_query], n_results=5)
-                print(results)
-        #         context = "\n\n".join([r["metadata"]["description"] for r in results['documents']])
-        # #         # Build prompt with retrieved data
-        # #         context = "\n\n".join([r["metadata"]["description"] for r in results["documents"]])
-        # #         context = "\n\n".join([r["metadata"]["description"] for r in results["documents"]])  # Correct approach
-        #         prompt = f"""
-        #         You are an assistant helping a student with job applications. Below are the job descriptions and resumes:
-
-        #         {context}
-
-        #         Question: {user_query}
-        #         Answer as a helpful assistant.
-        #         """
-
-        #         # Get response from Gemini
-        #         model = genai.GenerativeModel("gemini-1.5-flash-8b")
-        #         response = model.generate_content(prompt=prompt)
-
-        #         # Update chat history
-        #         st.session_state["chat_history"].append(("User", user_query))
-        #         st.session_state["chat_history"].append(("AI", response.text))
-
-        # # Display chat history
-        # for speaker, message in st.session_state["chat_history"]:
-        #     st.markdown(f"**{speaker}:** {message}")
+                results = collection.query(query_texts=[user_query], n_results = 5)
 
 
-    st.markdown('---')
-    # Back to Home button
+                context = "\n".join(results["documents"][0])
+                # st.write(context)
+                prompt = f"""
+                You are an assistant helping a student with job applications. Below are the job descriptions and resumes:
+
+                {context}
+
+                Question: {user_query}
+                Answer as a helpful assistant.
+                """
+                model = genai.GenerativeModel("models/gemini-1.5-flash-8b")
+                if "gemini_chat" not in st.session_state:
+                    st.session_state["gemini_chat"] = model.start_chat(history=[])
+
+                chat = st.session_state["gemini_chat"]
+                response = chat.send_message(prompt)
+
+
+                st.session_state["chat_history"].append({"user": user_query, "ai": response.text})
+                for chat in st.session_state["chat_history"]:
+                    
+                    st.write(f"**You:** {chat['user']}")
+                    st.write(f"**AI:** {chat['ai']}")
+
+            st.markdown('---')
+            # Back to Home button
     if st.button("Back to Home"):
+        # Delete ChromaDB collection for the current recruiter
+        if recruiter_code:
+            try:
+                client.delete_collection(name=f"recruiter_{recruiter_code}")
+                print("ChromaDB collection deleted successfully.")
+            except Exception as e:
+                st.error(f"Failed to delete ChromaDB collection: {e}")
+
+        # Clear chat history
+        st.session_state.pop("chat_history", None)
+        st.session_state.pop("gemini_chat", None)
+
+        # Navigate back to the home page
         st.session_state['page'] = 'landing'
         st.rerun()
+def clear_chroma_db():
+    """Function to clear the ChromaDB database."""
+    if os.path.exists('chroma_db'):
+        shutil.rmtree('chroma_db')
+        print("ChromaDB database cleared.")
+
+# Register the cleanup function to be called at application exit
+atexit.register(clear_chroma_db)
+
 
 
 # Student Login Page

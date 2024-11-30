@@ -4,15 +4,12 @@ from database_func import connect_db
 import google.generativeai as genai
 import os
 from chromadb.api.types import EmbeddingFunction
+import streamlit as st
 
 genai.configure(api_key=os.environ['GEMINI_API_KEY'])
 def gemini_embedding(text):
-    
     response = genai.embed_content(content=text, model="models/text-embedding-004")
     return response['embedding']
-
-
-
 
 class GeminiEmbeddingFunction(EmbeddingFunction):
     def __call__(self, input):
@@ -35,6 +32,7 @@ def fetch_job_descriptions(recruiter_code):
     conn.close()
     return [{"title": row[0], "description": row[1], "skills": row[2]} for row in data]
 
+
 def fetch_resumes(recruiter_code, selected_title):
     conn = connect_db()
     cursor = conn.cursor()
@@ -49,71 +47,40 @@ def fetch_resumes(recruiter_code, selected_title):
     return [{"student_code": row[0], "name": row[1], "resume_text": row[2]} for row in data]
 
 
-# def index_database_data(recruiter_code, chroma_collection):
-#     # Fetch job descriptions
-#     job_descriptions = fetch_job_descriptions(recruiter_code)
-#     for jd in job_descriptions:
-#         # jd_embedding = gemini_embedding(jd["description"] + "\nSkills: " + jd["skills"])
-#         chroma_collection.add(
-#             ids=[f"jd_{jd['title']}"],
-#             documents=[jd["description"]],
-#             # embeddings=[jd_embedding],
-#             metadatas=[{
-#                 "type": "job_description",
-#                 "title": jd["title"],
-#                 "description": jd["description"],
-#                 "skills": jd["skills"]
-#             }]
-#         )
 
-#     # Fetch resumes
-#     for jd in job_descriptions:
-#         resumes = fetch_resumes(recruiter_code, jd["title"])
-#         for resume in resumes:
-#             # resume_embedding = gemini_embedding(resume["resume_text"])
-#             chroma_collection.add(
-#                 ids=[f"resume_{resume['student_code']}"],
-#                 documents=[resume["resume_text"]],
-#                 # embeddings=[resume_embedding],
-#                 metadatas=[{
-#                     "type": "resume",
-#                     "student_code": resume["student_code"],
-#                     "name": resume["name"],
-#                     "title": jd["title"],
-#                     "resume_text": resume["resume_text"]
-#                 }]
-#             )
-def index_database_data(recruiter_code, chroma_collection):
-    # Fetch job descriptions
+def fetch_student_resume(student_code): #single student
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT rr.resume_text
+        FROM recruiter_resumes rr
+        JOIN students s ON rr.student_code = s.student_code
+        WHERE rr.student_code = ?
+    """, (student_code,))
+    data = cursor.fetchone()
+    conn.close()
+    return data[0]
+
+
+def index_database_data_for_student(recruiter_code, student_code, chroma_collection):
+    # Fetch all job descriptions for the given recruiter
     job_descriptions = fetch_job_descriptions(recruiter_code)
+    
+    # Add job descriptions to the Chroma collection
     for jd in job_descriptions:
-        jd_embedding = gemini_embedding(jd["description"] + "\nSkills: " + jd["skills"])
         chroma_collection.add(
             ids=[f"jd_{jd['title']}"],
             documents=[jd["description"]],
-            # embeddings=[jd_embedding],
-            metadatas=[{
-                "type": "job_description",
-                "title": jd["title"],
-                "description": jd["description"],
-                "skills": jd["skills"]
-            }]
         )
-
-    # Fetch resumes
-    for jd in job_descriptions:
-        resumes = fetch_resumes(recruiter_code, jd["title"])
-        for resume in resumes:
-            resume_embedding = gemini_embedding(resume["resume_text"])
-            chroma_collection.add(
-                ids=[f"resume_{resume['student_code']}"],
-                documents=[resume["resume_text"]],
-                # embeddings=[resume_embedding],
-                metadatas=[{
-                    "type": "resume",
-                    "student_code": resume["student_code"],
-                    "name": resume["name"],
-                    "title": jd["title"],
-                    "resume_text": resume["resume_text"]
-                }]
-            )
+    
+    # Fetch the single student's resume
+    resume_text = fetch_student_resume(student_code)
+    
+    if resume_text:
+        chroma_collection.add(
+            ids=[f"resume_{student_code}"],
+            documents=[resume_text],
+        )
+    else:
+        st.write(f"No resume found for student_code: {student_code}")
+    

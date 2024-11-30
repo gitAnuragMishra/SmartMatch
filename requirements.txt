@@ -1,4 +1,7 @@
-transformers
 streamlit
 sqlite3
-pyresparser
+pymupdf
+langchain
+transformers
+
+
