@@ -109,6 +109,9 @@ SmartMatch/
 - **HuggingFace Transformers**: For generating text embeddings and sentiment analysis.
 - **Google Generative AI**: Model for embeddings and chat assistance.
 
+### Application Screenshots
+
+- ![Main Dashboard](screenshots\landing_page.png "Main Dashboard") 
 
 ### Future Work
 - **Real-Time Notifications**: Notify recruiters and candidates via email/SMS for key events.
