@@ -111,7 +111,14 @@ SmartMatch/
 
 ### Application Screenshots
 
-- ![Main Dashboard](screenshots\landing_page.png "Main Dashboard") 
+- ![Main Dashboard](screenshots/landing_page.png "Main Dashboard") 
+- ![Recruiter Login](screenshots/recruiter_login.png "Recruiter Login") 
+- ![Recruiter Registration](screenshots/recruiter_registration.png "Recruiter Registration") 
+- ![Recruiter Dashboard](screenshots/recruiter_dashboard.png "Recruiter Dashboard") 
+- ![Candidate Login](screenshots/student_login.png "Candidate Login") 
+- ![Candidate Registration](screenshots/student_registration.png "Candidate Registration") 
+- ![Candidate Dashboard](screenshots/student_dashboard.png "Candidate Dashboard") 
+- ![Database Schema](screenshots/database_schema.png "Database Schema") 
 
 ### Future Work
 - **Real-Time Notifications**: Notify recruiters and candidates via email/SMS for key events.
