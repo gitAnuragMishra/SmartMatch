@@ -21,9 +21,6 @@ from chromadb.config import Settings
 settings = Settings(
     persist_directory=r"./chroma_db"  # Ensure this path exists
 )
-# client = Client(Settings(
-#     persist_directory=r"./chroma_db" # Correctly specify this field
-# ))
 
 import google.generativeai as genai
 
@@ -310,66 +307,9 @@ def recruiter_dashboard():
 
     st.markdown("---")
 
-    col4, col5  = st.columns(2)
+    col4, col5  = st.columns([2, 4.5])
 
     with col4:
-        if "chat_history" not in st.session_state:
-            st.session_state["chat_history"] = []
-
-        st.subheader("AI Recruiter Support Chat")
-        recruiter_code = recruiter_code
-        user_query = st.text_area("Ask about candidates' resumes or job descriptions:")
-
-        embedding_function = GeminiEmbeddingFunction()
-
-        if recruiter_code:
-            recruiter_client = chromadb.PersistentClient(path="chroma_db_recruiter")
-            collection = recruiter_client.get_or_create_collection(
-                name=f"recruiter_{recruiter_code}",
-                embedding_function=embedding_function
-            )
-
-            # Index data if not already done
-            collection_count = collection.count()
-            if collection_count == 0:
-                st.write("Indexing data for recruiter...")
-                index_database_data_for_recruiter(recruiter_code, collection)
-                collection_count = collection.count()
-
-            if st.button("Send") and user_query:
-                # Query ChromaDB
-                results = collection.query(query_texts=[user_query], n_results = collection_count)
-                # st.write(results)
-
-
-                context = "\n".join(results["documents"][0])
-                # st.write(context)
-                prompt = f"""
-                You are an assistant helping a recruiter with resumes submitted to him and his job postings. Below are the job descriptions and resumes:
-
-                {context}
-
-                Question: {user_query}
-                Answer as a helpful assistant and help him select best matching candidates for interviews.
-                """
-                model = genai.GenerativeModel("models/gemini-1.5-flash-8b")
-                if "gemini_chat" not in st.session_state:
-                    st.session_state["gemini_chat"] = model.start_chat(history=[])
-
-                chat = st.session_state["gemini_chat"]
-                response = chat.send_message(prompt)
-
-
-                st.session_state["chat_history"].append({"user": user_query, "ai": response.text})
-                with st.container():
-                    for chat in st.session_state["chat_history"]:
-                        st.write(f"*🧑‍🎓:* {chat['user']}")
-                        st.write(f"*🤖:* {chat['ai']}")
-                        st.markdown("---")
-
-
-
-    with col5:
         st.subheader("Contact Selected Candidates")
         st.write("Notify shortlisted candidates about interviews via email.")
 
@@ -442,6 +382,64 @@ def recruiter_dashboard():
         else:
             st.info("Select a job description to view and notify candidates.")
 
+
+
+    with col5:
+        if "chat_history" not in st.session_state:
+            st.session_state["chat_history"] = []
+
+        st.subheader("AI Recruiter Support Chat")
+        recruiter_code = recruiter_code
+        user_query = st.text_area("Ask about candidates' resumes or job descriptions:", placeholder="Chat with gemini-1.5-flash-8b")
+
+        embedding_function = GeminiEmbeddingFunction()
+
+        if recruiter_code:
+            global recruiter_client
+            recruiter_client = chromadb.PersistentClient(path="chroma_db_recruiter")
+            collection = recruiter_client.get_or_create_collection(
+                name=f"recruiter_{recruiter_code}",
+                embedding_function=embedding_function
+            )
+
+            # Index data if not already done
+            collection_count = collection.count()
+            if collection_count == 0:
+                st.write("Indexing data for recruiter...")
+                index_database_data_for_recruiter(recruiter_code, collection)
+                collection_count = collection.count()
+
+            if st.button("Send") and user_query:
+                # Query ChromaDB
+                results = collection.query(query_texts=[user_query], n_results = collection_count)
+                # st.write(results)
+
+
+                context = "\n".join(results["documents"][0])
+                # st.write(context)
+                prompt = f"""
+                You are an assistant helping a recruiter with resumes submitted to him and his job postings. Below are the job descriptions and resumes:
+
+                {context}
+
+                Question: {user_query}
+                Answer as a helpful assistant and help him select best matching candidates for interviews. Keep the responses consise and in bullet points wherever possible.
+                """
+                model = genai.GenerativeModel("models/gemini-1.5-flash-8b")
+                if "gemini_chat" not in st.session_state:
+                    st.session_state["gemini_chat"] = model.start_chat(history=[])
+
+                chat = st.session_state["gemini_chat"]
+                response = chat.send_message(prompt)
+
+
+                st.session_state["chat_history"].append({"user": user_query, "ai": response.text})
+                with st.container():
+                    for chat in st.session_state["chat_history"]:
+                        st.write(f"🧑‍🎓: {chat['user']}")
+                        st.write(f"🤖: {chat['ai']}")
+                        st.markdown("---")
+
     
     st.markdown("---")
     # Logout button
@@ -449,6 +447,7 @@ def recruiter_dashboard():
         if recruiter_code:
             try:
                 recruiter_client.delete_collection(name=f"recruiter_{recruiter_code}")
+                recruiter_client.close()
                 print("ChromaDB collection deleted successfully.")
             except Exception as e:
                 st.error(f"Failed to delete ChromaDB collection: {e}")
@@ -763,11 +762,12 @@ def student_dashboard():
 
         st.subheader("AI Student Support Chat")
         recruiter_code = recruiter_code
-        user_query = st.text_area("Ask a question about resumes or job descriptions:")
+        user_query = st.text_area("Ask a question about resumes or job descriptions:", placeholder="Chat with gemini-1.5-flash-8b")
 
         embedding_function = GeminiEmbeddingFunction()
 
         if recruiter_code:
+            global client
             client = chromadb.PersistentClient(path="chroma_db")
             collection = client.get_or_create_collection(
                 name=f"recruiter_{recruiter_code}",
@@ -795,7 +795,7 @@ def student_dashboard():
                 {context}
 
                 Question: {user_query}
-                Answer as a helpful assistant.
+                Answer as a helpful assistant. Keep the responses consise.
                 """
                 model = genai.GenerativeModel("models/gemini-1.5-flash-8b")
                 if "gemini_chat" not in st.session_state:
@@ -808,8 +808,8 @@ def student_dashboard():
                 st.session_state["chat_history"].append({"user": user_query, "ai": response.text})
                 with st.container():
                     for chat in st.session_state["chat_history"]:
-                        st.write(f"*🧑‍🎓:* {chat['user']}")
-                        st.write(f"*🤖:* {chat['ai']}")
+                        st.write(f"🧑‍🎓: {chat['user']}")
+                        st.write(f"🤖: {chat['ai']}")
                         st.markdown("---")
 
             
@@ -821,6 +821,7 @@ def student_dashboard():
             try:
                 client.delete_collection(name=f"recruiter_{recruiter_code}")
                 print("ChromaDB collection deleted successfully.")
+                client.close()
             except Exception as e:
                 st.error(f"Failed to delete ChromaDB collection: {e}")
 
@@ -834,24 +835,17 @@ def student_dashboard():
 
 
 
-def clear_chroma_db():
-    """Function to clear the ChromaDB database."""
-    if os.path.exists('chroma_db') :
-        shutil.rmtree('chroma_db')
-        print("ChromaDB student databases cleared.")
-    if os.path.exists('chroma_db_recruiter'):
-        shutil.rmtree('chroma_db_recruiter')
-        print("ChromaDB recruiter databases cleared.")
-
-# Register the cleanup function to be called at application exit
-
-# def wait():
-#     time.sleep(2)
+# def clear_chroma_db():
+#     """Function to clear the ChromaDB database."""
+#     if os.path.exists('chroma_db') :
+#         shutil.rmtree('chroma_db')
+#         print("ChromaDB student databases cleared.")
+#     if os.path.exists('chroma_db_recruiter'):
+#         shutil.rmtree('chroma_db_recruiter')
+#         print("ChromaDB recruiter databases cleared.")
 
 
-# atexit.register(wait)
-# time.sleep(1)
-atexit.register(clear_chroma_db)
+# atexit.register(clear_chroma_db)
 
 
 
