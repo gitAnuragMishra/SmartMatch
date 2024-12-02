@@ -77,8 +77,7 @@ SmartMatch/
 ├── smartmatch.db/          # SQL database for candidate, recruiter details, job descriptions and resumes (auto initialisation)
 └── README.md               # ReadMe documentation
 ```
-
-```
+---
 ### Features
 
 1. **Recruiter Portal**
@@ -94,7 +93,6 @@ SmartMatch/
 3. **General Features**
     - Data Persistence: Uses SQLite and ChromaDB for data and embedding storage.
     - PDF Processing: Extract text from resumes and job descriptions.
-
 
 ### Challenges
 
