@@ -19,7 +19,7 @@ import chromadb
 from chromadb.config import Settings
 
 settings = Settings(
-    persist_directory=r"./chroma_db"  # Ensure this path exists
+    persist_directory=r"./chroma_db"  
 )
 
 import google.generativeai as genai
@@ -39,7 +39,7 @@ def gemini_embedding(text):
     return response['embedding']
 
 
-# Set page configuration
+
 st.set_page_config(page_title="SmartMatch", page_icon=":briefcase:", layout="wide")
 
 # Landing Page
@@ -65,7 +65,7 @@ def landing_page():
     st.markdown("---")
     st.header("Choose Your Role")
     
-    # Role selection buttons
+    
     col1, col2 = st.columns(2)
     with col1:
         if st.button("RECRUITER"):
@@ -83,7 +83,7 @@ def recruiter_login():
     recruiter_code = st.text_input("Recruiter Code")
     password = st.text_input("Password", type="password")
     
-    # Login and Registration Buttons
+    
     col1, col2, col3 = st.columns(3)
     with col1:
         if st.button("Login"):
@@ -117,7 +117,7 @@ def recruiter_registration():
         else:
             st.error("Please enter both code and password.")
     
-    # Back to Login Page button
+    
     if st.button("Back to Login Page"):
         st.session_state['page'] = 'recruiter_login'
         st.rerun()
@@ -128,7 +128,7 @@ def recruiter_dashboard():
     st.write(f"Welcome, Recruiter! Manage candidates, review profiles, and match with ideal candidates.")
     st.markdown("---")
 
-    # Job Openings Section with Save and Delete Features
+    
     recruiter_code = st.session_state["recruiter_code"]
     col1, col2, col3 = st.columns([2, 1.5, 3])
 
@@ -136,10 +136,9 @@ def recruiter_dashboard():
         st.subheader("Job Openings")
         st.write("Post job openings, filter based on qualifications, and manage each candidate's status in the hiring pipeline.")
 
-        # Fetch previously uploaded job descriptions
+        
         previous_descriptions = get_job_descriptions(recruiter_code)
 
-        # Dropdown for previously uploaded job descriptions
         selected_title = None
         if previous_descriptions:
             selected_title = st.selectbox(
@@ -149,9 +148,9 @@ def recruiter_dashboard():
             )
             if selected_title:
                 with st.expander(f"**View Job Description: {selected_title}**", expanded=False):
-                    st.write(previous_descriptions[selected_title])  # Display JD description
+                    st.write(previous_descriptions[selected_title])  
                 with st.expander(f"**Required Skills: {selected_title}**", expanded=False):
-                    # Fetch and display skills from the database
+                    
                     conn = connect_db()
                     cursor = conn.cursor()
                     cursor.execute(
@@ -161,17 +160,16 @@ def recruiter_dashboard():
                     skills_result = cursor.fetchone()
                 
                     if skills_result and skills_result[0]:
-                        # st.markdown("**Extracted Skills:**")
-                        st.write(skills_result[0])  # Display comma-separated skills
+                        st.write(skills_result[0])
                     else:
                         st.info("No skills found for this job description.")
                     conn.close()
                     
 
-        # Add Job Description Title
+
         job_title = st.text_input("**Add new job opening**", placeholder="e.g., Software Engineer Intern", key="job_title")
 
-        # Option to paste or upload job description
+
         job_description_option = st.radio(
             "How would you like to add the job description?",
             ("Paste text", "Upload PDF"),
@@ -191,19 +189,19 @@ def recruiter_dashboard():
                 else:
                     st.error("Could not extract text. Ensure the PDF contains selectable text or use an OCR-enabled PDF.")
 
-        # Save Job Description Button
+
         if job_title and job_description and st.button("Save Job Description", key="save_button"):
-            # Skills list to compare
+
             extracted_skills = extract_skills(job_description, skills_list)
             
-            # Save job description and extracted skills
+ 
             if save_job_description(recruiter_code, job_title, job_description, uploaded_file, extracted_skills):
                 st.success("Job description saved successfully!")
                 st.rerun()
             else:
                 st.error("Failed to save job description. Please try again.")
 
-        # Delete All Job Descriptions Button
+
         if previous_descriptions and st.button("Delete All Job Descriptions"):
             delete_all_job_descriptions(recruiter_code)
             st.success("All job descriptions deleted successfully!")
@@ -214,7 +212,7 @@ def recruiter_dashboard():
         st.write("View candidate profiles and review their skills and experience.")
 
         if selected_title:
-            # Fetch resumes for the selected job description
+         
             conn = connect_db()
             cursor = conn.cursor()
             cursor.execute(
@@ -245,9 +243,8 @@ def recruiter_dashboard():
 
         if selected_title:
             st.write(f"**Job Description:** {selected_title}")
-            jd_text = previous_descriptions[selected_title]  # Fetch JD text
+            jd_text = previous_descriptions[selected_title]
 
-            # Fetch resumes for the selected JD
             conn = connect_db()
             cursor = conn.cursor()
             cursor.execute(
@@ -262,12 +259,12 @@ def recruiter_dashboard():
             resumes = cursor.fetchall()
 
             if resumes:
-                # Extract resume texts
+                
                 resume_data = [{"Student ID": r[0], "Name": r[1], "Resume": r[2]} for r in resumes]
 
-                # Compute embeddings for JD and resumes using Gemini API
-                # jd_embedding = gemini_embedding(jd_text)  # Use the embedding function
-                jd_skills = extract_skills(jd_text, skills_list)  # Extract JD skills
+                
+                # jd_embedding = gemini_embedding(jd_text) 
+                jd_skills = extract_skills(jd_text, skills_list) 
                 jd_skills_text = ", ".join(jd_skills)
                 jd_embedding = gemini_embedding(jd_skills_text)
 
@@ -277,7 +274,7 @@ def recruiter_dashboard():
                     # resume_embedding = gemini_embedding(r["Resume"])
                     # similarity = cosine_similarity([jd_embedding], [resume_embedding])[0][0] * 100
 
-                    # Extract skills from the resume
+
                     resume_skills = extract_skills(r["Resume"], skills_list)
                     resume_skills_text = ", ".join(resume_skills)
                     resume_embedding = gemini_embedding(resume_skills_text)
@@ -294,7 +291,7 @@ def recruiter_dashboard():
                         "Matching Skills": matching_skills
                     })
 
-                # Display the table with resume scores and matching skills
+
                 st.write("**Resumes with Resume Scores and Matching Skills:**")
 
                 resume_df = pd.DataFrame(resume_scores)
@@ -314,7 +311,7 @@ def recruiter_dashboard():
         st.write("Notify shortlisted candidates about interviews via email.")
 
         if selected_title:
-            # Fetch candidates for the selected job description
+            
             cursor.execute(
                 """
                 SELECT s.student_code, s.name, s.email
@@ -329,23 +326,23 @@ def recruiter_dashboard():
             recruiter_email = cursor.fetchone()[0]
 
             if candidates:
-                # Prepare candidate data
+              
                 candidate_data = [{"Student ID": c[0], "Name": c[1], "Email": c[2]} for c in candidates]
                 candidate_df = pd.DataFrame(candidate_data)
                 candidate_df["Select"] = False
 
-                # Display candidates with checkboxes
+                
                 for idx, row in candidate_df.iterrows():
                     candidate_df.loc[idx, "Select"] = st.checkbox(f"Select {row['Name']}", key=f"candidate_{row['Student ID']}")
 
-                # Filter selected candidates
+              
                 selected_candidates = candidate_df[candidate_df["Select"]]
                 if not selected_candidates.empty:
                     st.write("Selected Candidates:")
                     st.dataframe(selected_candidates[["Student ID", "Name", "Email"]], use_container_width=True)
 
-                    # Predefined email body
-                    gmeet_link = "https://meet.google.com/example-link"  # Replace with your Gmeet generation logic
+                    # email body
+                    gmeet_link = "https://meet.google.com/example-link"  
                     # email_body = f"""
                     # Hello,\n
                     # You have been shortlisted for an interview for the job role {selected_title}.\n
@@ -358,18 +355,18 @@ def recruiter_dashboard():
                     body = st.text_area("Write your email message:", placeholder="Type your message here...", label_visibility='hidden', value=email_body.strip(), height=200, disabled=False)
 
 
-                    # Display the email body
+                    
                     # body = st.text_area("Email Content", value=email_body.strip(), height=200, disabled=False)
 
                     if st.button("Send Email"):
-                        # Prepare Gmail link
+                        
                         recipient_emails = ",".join(selected_candidates["Email"].tolist())
                         
                         gmail_url = (
                             f"https://mail.google.com/mail/?view=cm&fs=1&to={recipient_emails}"
                             f"&su=Interview Invite for {selected_title}&body={body}"
                         )
-                        # Open Gmail in the browser's new tab
+                        
                         st.markdown(
                             f'<a href="{gmail_url}" target="_blank">Click here to send the email</a>',
                             unsafe_allow_html=True
@@ -402,7 +399,7 @@ def recruiter_dashboard():
                 embedding_function=embedding_function
             )
 
-            # Index data if not already done
+           
             collection_count = collection.count()
             if collection_count == 0:
                 st.write("Indexing data for recruiter...")
@@ -410,7 +407,7 @@ def recruiter_dashboard():
                 collection_count = collection.count()
 
             if st.button("Send") and user_query:
-                # Query ChromaDB
+                
                 results = collection.query(query_texts=[user_query], n_results = collection_count)
                 # st.write(results)
 
@@ -442,7 +439,7 @@ def recruiter_dashboard():
 
     
     st.markdown("---")
-    # Logout button
+  
     if st.button("Logout", key="logout_button"):
         if recruiter_code:
             try:
@@ -452,7 +449,7 @@ def recruiter_dashboard():
             except Exception as e:
                 st.error(f"Failed to delete ChromaDB collection: {e}")
 
-        # Clear chat history
+        
         st.session_state.pop("chat_history", None)
         st.session_state.pop("gemini_chat", None)
 
@@ -463,7 +460,7 @@ def recruiter_dashboard():
 
 
 
-# Helper function to extract text from a PDF
+# extract text from a PDF
 def extract_text_from_pdf(uploaded_file):
     try:
         pdf_text = ""
@@ -479,7 +476,7 @@ def extract_text_from_pdf(uploaded_file):
         st.error("Error reading PDF file.")
         return None
 
-# # OCR function for image-based PDFs
+# # OCR function
 # def ocr_pdf(uploaded_file):
 #     pdf_images = []
 #     with fitz.open(stream=uploaded_file, filetype="pdf") as pdf:
@@ -495,18 +492,17 @@ def extract_text_from_pdf(uploaded_file):
 
 # Student Page
 def student_dashboard():
-    # Display a welcome message with the student's name
+
     if "student_name" in st.session_state:
         st.title(f":mortar_board: Welcome, {st.session_state['student_name']}!")
     else:
         st.title(":mortar_board: STUDENT Dashboard")
         st.warning("Please log in to see your details.")
-        return  # Stop execution if the student is not logged in
+        return 
 
-    # Fetch student code for database operations
+
     student_code = st.session_state.get("student_code")
 
-    # Recruiter Matching Section
     recruiter_code = st.text_input("Enter Recruiter Code to Connect")
     recruiter_email = None
     job_descriptions = []
@@ -522,7 +518,7 @@ def student_dashboard():
                 recruiter_email = result[0]
                 st.success("Recruiter found. Fetching job descriptions...")
 
-                # Fetch Job Descriptions for the connected recruiter
+                
                 cursor.execute(
                     """
                     SELECT jd.id, jd.title, jd.description
@@ -541,14 +537,12 @@ def student_dashboard():
 
     st.markdown("---")
 
-    # Fetch previously stored resume text
     conn = connect_db()
     cursor = conn.cursor()
     cursor.execute("SELECT pdf_location FROM students WHERE student_code = ?", (student_code,))
     result = cursor.fetchone()
     previous_text = result[0] if result else None
 
-    # Columns for Resume Handling and Recruiter Contact
     col1, col2 = st.columns([2, 3])
     with col1:
         st.subheader("Your Resume Text")
@@ -561,28 +555,28 @@ def student_dashboard():
 
         if uploaded_file:
             try:
-                # Extract text from uploaded PDF
+                
                 pdf_text = ""
                 with fitz.open(stream=uploaded_file.read(), filetype="pdf") as doc:
                     for page in doc:
                         pdf_text += page.get_text()
 
                 if pdf_text.strip():
-                    # Extract skills from resume text
+                  
                     extracted_skills = []
                     if skills_list:
                         extracted_skills = extract_skills(pdf_text, skills_list)
                     extracted_skills = list(set(extracted_skills))
                     extracted_skills_str = ", ".join(extracted_skills)
 
-                    # Save extracted text and skills into the student's `pdf_location` field
+                    
                     cursor.execute(
                         "UPDATE students SET pdf_location = ? WHERE student_code = ?",
                         (pdf_text, student_code),
                     )
                     conn.commit()
 
-                    # Display extracted text and skills
+                   
                     st.markdown("### Extracted Resume Text")
                     st.text_area("Extracted text from your uploaded resume:", value=pdf_text, height=200, disabled=True)
 
@@ -595,21 +589,20 @@ def student_dashboard():
             except Exception as e:
                 st.error(f"An error occurred while processing the PDF: {str(e)}")
 
-        # Display available job descriptions
         if job_descriptions:
             st.subheader("Available Job Descriptions from Recruiter")
-            jd_options = {jd[1]: f"{jd[1]} - {jd[2][:50]}..." for jd in job_descriptions}  # JD title and short description
+            jd_options = {jd[1]: f"{jd[1]} - {jd[2][:50]}..." for jd in job_descriptions}  
             selected_jd_title = st.selectbox("Select a Job Description to Apply For", jd_options.keys(), format_func=lambda x: jd_options[x])
         else:
             selected_jd_title = None
 
-        # Buttons for sending and withdrawing applications
+   
         col_apply, col_withdraw = st.columns(2)
 
         with col_apply:
             if st.button("Send Resume to Recruiter"):
                 if recruiter_code and previous_text and selected_jd_title:
-                    # Check if a record already exists with the title instead of jd_id
+                   
                     cursor.execute(
                         "SELECT COUNT(*) FROM recruiter_resumes WHERE recruiter_code = ? AND student_code = ? AND jd_title = ?",
                         (recruiter_code, student_code, selected_jd_title),
@@ -619,7 +612,7 @@ def student_dashboard():
                     if record_exists:
                         st.warning("You have already sent your resume for this job description.")
                     else:
-                        # Insert the new record with the job description title and extracted skills
+                        
                         cursor.execute(
                             """
                             INSERT INTO recruiter_resumes 
@@ -636,7 +629,7 @@ def student_dashboard():
         with col_withdraw:
             if st.button("Withdraw Application"):
                 if recruiter_code and selected_jd_title:
-                    # Check if a record exists to withdraw
+                   
                     cursor.execute(
                         "SELECT COUNT(*) FROM recruiter_resumes WHERE recruiter_code = ? AND student_code = ? AND jd_title = ?",
                         (recruiter_code, student_code, selected_jd_title),
@@ -644,7 +637,7 @@ def student_dashboard():
                     record_exists = cursor.fetchone()[0]
 
                     if record_exists:
-                        # Delete the record for the selected job description
+                       
                         cursor.execute(
                             "DELETE FROM recruiter_resumes WHERE recruiter_code = ? AND student_code = ? AND jd_title = ?",
                             (recruiter_code, student_code, selected_jd_title),
@@ -664,9 +657,9 @@ def student_dashboard():
         )
 
         if recruiter_code:
-            # Validate recruiter existence
+            
             if recruiter_exists(recruiter_code):
-                # Fetch job descriptions for the recruiter
+               
                 conn = connect_db()
                 cursor = conn.cursor()
                 cursor.execute("""
@@ -677,7 +670,7 @@ def student_dashboard():
                 """, (recruiter_code,))
                 job_descriptions = cursor.fetchall()
 
-                # Fetch the student's resume
+                
                 student_code = st.session_state.get("student_code")
                 cursor.execute("SELECT pdf_location FROM students WHERE student_code = ?", (student_code,))
                 result = cursor.fetchone()
@@ -686,14 +679,14 @@ def student_dashboard():
                 if not result or not result[0]:
                     st.error("No resume uploaded. Please upload your resume first.")
                 else:
-                    # Extract student's skills from their resume
+                    
                     resume_text = result[0]
                     student_skills = extract_skills(resume_text, skills_list)
 
                     if not student_skills:
                         st.warning("No skills could be extracted from your resume.")
                     else:
-                        # Calculate compatibility
+                       
                         compatibility_data = []
                         student_embedding = gemini_embedding(", ".join(student_skills)) 
                         for jd_title, jd_skills in job_descriptions:
@@ -706,7 +699,7 @@ def student_dashboard():
 
                             similarity = cosine_similarity([student_embedding], [jd_embedding])[0][0] * 100
 
-                        # Compute cosine similarity
+                        
                             compatibility_data.append({
                                 "Job Title": jd_title,
                                 "Required Skills": ", ".join(jd_skills_list),
@@ -717,7 +710,7 @@ def student_dashboard():
                             })
                         st.write('**Your Skills:**')
                         st.write(', '.join(student_skills))
-                        # Display results in a tabular format
+                        
                         if compatibility_data:
                             import pandas as pd
                             compatibility_df = pd.DataFrame(compatibility_data)
@@ -743,12 +736,11 @@ def student_dashboard():
 
             if st.button("Send Email"):
                 if email_body.strip():
-                    # Construct Gmail-specific URL
                     gmail_url = (
                         f"https://mail.google.com/mail/?view=cm&fs=1&to={recruiter_email}"
                         f"&su=Job Inquiry&body={email_body}"
                     )
-                    # Open Gmail in the browser's new tab
+                    
                     st.markdown(
                         f'<a href="{gmail_url}" target="_blank">Click here to send the email</a>',
                         unsafe_allow_html=True
@@ -774,7 +766,6 @@ def student_dashboard():
                 embedding_function=embedding_function
             )
 
-            # Index data if not already done
             collection_count = collection.count()
             if collection_count == 0:
                 st.write("Indexing data for candidate...")
@@ -783,7 +774,7 @@ def student_dashboard():
                 
                 
             if st.button("Send") and user_query:
-                # Query ChromaDB
+            
                 results = collection.query(query_texts=[user_query], n_results = collection_count)
 
 
@@ -813,10 +804,10 @@ def student_dashboard():
                         st.markdown("---")
 
             
-    # Back to Home button
+  
     st.markdown('---')
     if st.button("Back to Home"):
-        # Delete ChromaDB collection for the current recruiter
+       
         if recruiter_code:
             try:
                 client.delete_collection(name=f"recruiter_{recruiter_code}")
@@ -825,11 +816,11 @@ def student_dashboard():
             except Exception as e:
                 st.error(f"Failed to delete ChromaDB collection: {e}")
 
-        # Clear chat history
+       
         st.session_state.pop("chat_history", None)
         st.session_state.pop("gemini_chat", None)
 
-        # Navigate back to the home page
+        
         st.session_state['page'] = 'landing'
         st.rerun()
 
@@ -852,19 +843,17 @@ def student_dashboard():
 # Student Login Page
 def student_login():
     st.title(":mortar_board: Student Login")
-    
-    # Login Fields
+
     student_code = st.text_input("Student Code", key="student_code_input")
     password = st.text_input("Password", type="password", key="password_input")
-    
-    # Login and Navigation Buttons
+
     col1, col2, col3 = st.columns(3)
     
-    # Login Logic
+
     with col1:
         if st.button("Login"):
             if validate_student(student_code, password):
-                # Fetch student name
+
                 conn = connect_db()
                 cursor = conn.cursor()
                 cursor.execute(
@@ -875,9 +864,9 @@ def student_login():
                 conn.close()
 
                 if result:
-                    st.session_state['student_name'] = result[0]  # Store student name
-                    st.session_state['student_code'] = student_code  # Store student code
-                    st.session_state['page'] = 'student_dashboard'  # Navigate to dashboard
+                    st.session_state['student_name'] = result[0]  
+                    st.session_state['student_code'] = student_code
+                    st.session_state['page'] = 'student_dashboard'  
                     st.success(f"Welcome, {result[0]}!")
                     st.rerun()
                 else:
@@ -885,13 +874,12 @@ def student_login():
             else:
                 st.error("Invalid student code or password.")
     
-    # Registration Button
+
     with col2:
         if st.button("Register as Student"):
             st.session_state['page'] = 'student_registration'
             st.rerun()
-    
-    # Back to Home Button
+
     with col3:
         if st.button("Back to Home"):
             st.session_state['page'] = 'landing'
@@ -901,29 +889,26 @@ def student_login():
 def student_registration():
     st.title(":mortar_board: Student Registration")
     
-    # Registration Fields
     name = st.text_input("Full Name")
     student_code = st.text_input("Create Student Code")
     password = st.text_input("Create Password", type="password")
     email = st.text_input("Email Address")
     
-    # Registration Button
     if st.button("Register"):
         if name and student_code and password and email:
-            if not student_exists(student_code):  # Check if the student code is unique
+            if not student_exists(student_code):  
                 add_student(student_code, name, password, email)
                 st.success("Student registered successfully!")
             else:
                 st.error("Student code already exists. Please choose a different code.")
         else:
             st.error("Please fill out all fields.")
-    
-    # Back to Login Page Button
+
     if st.button("Back to Login Page"):
         st.session_state['page'] = 'student_login'
         st.rerun()
 
-# Main logic for handling pages
+# page handling
 if 'page' not in st.session_state:
     st.session_state['page'] = 'landing'
 

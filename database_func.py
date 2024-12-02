@@ -15,7 +15,7 @@ def create_tables():
     conn = connect_db()
     c = conn.cursor()
 
-    # Create recruiters table
+    # recruiters table
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS recruiters (
@@ -27,7 +27,7 @@ def create_tables():
         """
     )
 
-    # Create job_descriptions table with title
+    # job_descriptions table with title
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS job_descriptions (
@@ -41,7 +41,7 @@ def create_tables():
         )
         """
     )
-    # Create students table
+    # students table
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS students (
@@ -54,7 +54,7 @@ def create_tables():
         )
         """
     )
-    # Create resumes table
+    # resumes table
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS recruiter_resumes (
@@ -105,7 +105,7 @@ def recruiter_exists(recruiter_code):
     conn.close()
     return exists
 
-# Student Functions
+
 def add_student(student_code, name, password, email):
     conn = connect_db()
     cursor = conn.cursor()
@@ -158,14 +158,14 @@ def save_job_description(recruiter_code, title, job_description, jd_pdf_file=Non
     conn = connect_db()
     c = conn.cursor()
     try:
-        # Fetch recruiter ID
+        
         c.execute("SELECT recruiter_id FROM recruiters WHERE recruiter_code = ?", (recruiter_code,))
         recruiter = c.fetchone()
         if recruiter:
             recruiter_id = recruiter[0]
             pdf_location = None
             
-            # Save uploaded PDF
+           
             if jd_pdf_file:
                 pdf_dir = "jd_pdfs"
                 os.makedirs(pdf_dir, exist_ok=True)
@@ -175,14 +175,14 @@ def save_job_description(recruiter_code, title, job_description, jd_pdf_file=Non
                     f.write(jd_pdf_file.getbuffer())
                 pdf_location = pdf_file_path
 
-            # Extract skills
+            
             extracted_skills = []
             if skills_list:
                 extracted_skills = extract_skills(job_description, skills_list)
             extracted_skills = list(set(extracted_skills))
-            skills_str = ", ".join(extracted_skills)  # Convert skills list to comma-separated string
+            skills_str = ", ".join(extracted_skills) 
 
-            # Insert job description with skills
+            
             c.execute(
                 "INSERT INTO job_descriptions (recruiter_id, title, description, jd_pdf_location, skills) VALUES (?, ?, ?, ?, ?)",
                 (recruiter_id, title, job_description, pdf_location, skills_str),
@@ -208,10 +208,10 @@ def get_job_descriptions(recruiter_code):
         recruiter = c.fetchone()
         if recruiter:
             recruiter_id = recruiter[0]
-            # Fetch title and description
+            
             c.execute("SELECT title, description FROM job_descriptions WHERE recruiter_id = ?", (recruiter_id,))
             descriptions = c.fetchall()
-            # Map titles to descriptions
+            
             return {desc[0]: desc[1] for desc in descriptions}
         else:
             return {}
@@ -239,12 +239,12 @@ def delete_all_job_descriptions(recruiter_code):
     conn = connect_db()
     c = conn.cursor()
     try:
-        # Fetch recruiter_id by recruiter_code
+        
         c.execute("SELECT recruiter_id FROM recruiters WHERE recruiter_code = ?", (recruiter_code,))
         recruiter = c.fetchone()
         if recruiter:
             recruiter_id = recruiter[0]
-            # Delete all job descriptions for the recruiter
+           
             c.execute("DELETE FROM job_descriptions WHERE recruiter_id = ?", (recruiter_id,))
             conn.commit()
             return True
@@ -270,5 +270,5 @@ def unlink_database():
 
 
 
-# Ensure tables are created at runtime
+# initialise tables at runtime if not created
 create_tables()

@@ -15,7 +15,6 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
     def __call__(self, input):
         return [gemini_embedding(doc) for doc in input]
 
-# Create embedding function instance
 
 
 
@@ -63,10 +62,9 @@ def fetch_student_resume(student_code): #single student
 
 
 def index_database_data_for_student(recruiter_code, student_code, chroma_collection):
-    # Fetch all job descriptions for the given recruiter
+   
     job_descriptions = fetch_job_descriptions(recruiter_code)
-    
-    # Add job descriptions to the Chroma collection
+
     for jd in job_descriptions:
         chroma_collection.add(
             ids=[f"jd_{jd['title']}"],
@@ -85,7 +83,7 @@ def index_database_data_for_student(recruiter_code, student_code, chroma_collect
         st.write(f"No resume found for student_code: {student_code}")
 
 def index_database_data_for_recruiter(recruiter_code, chroma_collection):
-    # Fetch all job descriptions for the recruiter
+
     job_descriptions = fetch_job_descriptions(recruiter_code)
     
     for jd in job_descriptions:
@@ -94,7 +92,7 @@ def index_database_data_for_recruiter(recruiter_code, chroma_collection):
             documents=[jd["description"]],
         )
     
-    # Fetch all resumes applied to the recruiter
+
     for jd in job_descriptions:
         resumes = fetch_resumes(recruiter_code, jd["title"])
         for resume in resumes:
