@@ -45,6 +45,7 @@ SmartMatch is a recruitment assistant platform designed to streamline hiring pro
     - paste the google gemini api key
     ``` 
     GEMINI_API_KEY = <api key>
+    
 ---
 
 ### Usage
@@ -76,8 +77,7 @@ SmartMatch/
 ├── smartmatch.db/          # SQL database for candidate, recruiter details, job descriptions and resumes (auto initialisation)
 └── README.md               # ReadMe documentation
 ```
-
-
+---
 ### Features
 
 1. **Recruiter Portal**
@@ -93,7 +93,6 @@ SmartMatch/
 3. **General Features**
     - Data Persistence: Uses SQLite and ChromaDB for data and embedding storage.
     - PDF Processing: Extract text from resumes and job descriptions.
-
 
 ### Challenges
 
@@ -118,4 +117,3 @@ SmartMatch/
 
 ### License
 This project is licensed under the MIT License. See the LICENSE file for details.
-
