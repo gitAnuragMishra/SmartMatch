@@ -280,14 +280,16 @@ def recruiter_dashboard():
                     resume_embedding = gemini_embedding(resume_skills_text)
 
                     similarity = cosine_similarity([jd_embedding], [resume_embedding])[0][0]*100
+                    compatibility = '✅' if similarity >= 70 else '❌'
 
                     matching_skills = ", ".join(set(jd_skills).intersection(resume_skills))
 
                     resume_scores.append({
                         "Student ID": r["Student ID"],
                         "Name": r["Name"],
-                        "Resume": r["Resume"],
+                        # "Resume": r["Resume"],
                         "Resume Score": round(similarity, 2),
+                        "Compatibility": compatibility,
                         "Matching Skills": matching_skills
                     })
 
@@ -295,7 +297,7 @@ def recruiter_dashboard():
                 st.write("**Resumes with Resume Scores and Matching Skills:**")
 
                 resume_df = pd.DataFrame(resume_scores)
-                st.dataframe(resume_df[["Student ID", "Name", "Resume Score", "Matching Skills"]].sort_values("Resume Score", ascending=False), use_container_width=True)
+                st.dataframe(resume_df[["Student ID", "Name", "Resume Score", "Compatibility", "Matching Skills"]].sort_values("Resume Score", ascending=False), use_container_width=True)
             else:
                 st.info("No resumes submitted for the selected job description.")
         else:
@@ -386,7 +388,7 @@ def recruiter_dashboard():
             st.session_state["chat_history"] = []
 
         st.subheader("AI Recruiter Support Chat")
-        recruiter_code = recruiter_code
+        
         user_query = st.text_area("Ask about candidates' resumes or job descriptions:", placeholder="Chat with gemini-1.5-flash-8b")
 
         embedding_function = GeminiEmbeddingFunction()
@@ -420,7 +422,9 @@ def recruiter_dashboard():
                 {context}
 
                 Question: {user_query}
-                Answer as a helpful assistant and help him select best matching candidates for interviews. Keep the responses consise and in bullet points wherever possible.
+                Answer as a helpful assistant and help him select best matching candidates for interviews. 
+                Keep the responses consise and in bullet points wherever possible. If the query is out of context, 
+                like not any job related or resume related, then just answer out of your general knowledge. 
                 """
                 model = genai.GenerativeModel("models/gemini-1.5-flash-8b")
                 if "gemini_chat" not in st.session_state:
@@ -440,12 +444,11 @@ def recruiter_dashboard():
     
     st.markdown("---")
   
-    if st.button("Logout", key="logout_button"):
+    if st.button("Logout"):
         if recruiter_code:
             try:
                 recruiter_client.delete_collection(name=f"recruiter_{recruiter_code}")
-                recruiter_client.close()
-                print("ChromaDB collection deleted successfully.")
+                print("Recruiter ChromaDB collection deleted successfully.")
             except Exception as e:
                 st.error(f"Failed to delete ChromaDB collection: {e}")
 
@@ -786,7 +789,8 @@ def student_dashboard():
                 {context}
 
                 Question: {user_query}
-                Answer as a helpful assistant. Keep the responses consise.
+                Answer as a helpful assistant. Keep the responses consise. If the query is out of context, 
+                like not any job related or resume related, then just answer out of your general knowledge.
                 """
                 model = genai.GenerativeModel("models/gemini-1.5-flash-8b")
                 if "gemini_chat" not in st.session_state:
@@ -811,7 +815,7 @@ def student_dashboard():
         if recruiter_code:
             try:
                 client.delete_collection(name=f"recruiter_{recruiter_code}")
-                print("ChromaDB collection deleted successfully.")
+                print("Candidate ChromaDB collection deleted successfully.")
                 client.close()
             except Exception as e:
                 st.error(f"Failed to delete ChromaDB collection: {e}")
